@@ -1,0 +1,64 @@
+from langchain_postgres.v2.engine import Column
+import re
+
+LINKEDIN_DOMAIN="linkedin.com"
+LINKEDIN_SITE="se.linkedin.com/jobs/"
+
+JOBSEARCH_DOMAINS=[LINKEDIN_DOMAIN]
+
+JOBSEARCH_SITE_REF={
+    LINKEDIN_DOMAIN: LINKEDIN_SITE
+}
+
+JOBSEARCH_MAX_RESULTS=20
+JOBSEARCH_DEFAULT_LOCATION="sweden"
+JOBSEARCH_RELEVANCE_SCORE_CUTOFF=0.3
+TAVILY_BATCH_SIZE=5
+
+DATE_FORMAT_DEFAULT = "%Y-%m-%d"
+MAX_LOOKBACK_DAYS = 14
+CHUNK_DAYS_DEFAULT = 7
+
+IMAGE_MD_PATTERN = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+LINK_MD_PATTERN = re.compile(r"\[[^\]]*\]\([^)]*\)")
+BARE_URL_PATTERN = re.compile(r"https?://\S+")
+
+JOBEVALUATOR_MODEL="qwen/qwen3.8-27b"
+
+EMBEDDING_MODEL="jinaai/jina-embeddings-v5-text-nano"
+EMBEDDING_DIMENSION=768
+EMBEDDING_MODEL_REVISION="8a7f00a"
+
+AUDIT_COLUMN_CREATED_AT="created_at"
+AUDIT_COLUMN_UPDATED_AT="updated_at"
+
+AUDIT_COLUMNS = [
+    Column(AUDIT_COLUMN_CREATED_AT, "TIMESTAMPTZ", nullable=False),
+    Column(AUDIT_COLUMN_UPDATED_AT, "TIMESTAMPTZ", nullable=True),
+]
+
+AUDIT_COLUMNS_SQL = f"""created_at TIMESTAMPTZ NOT NULL, 
+                        updated_at TIMESTAMPTZ"""
+
+
+JOBS_TABLE="jobs"
+JOBS_TABLE_ID="jobs_id"
+JOBS_TABLE_SOURCE="source"
+JOBS_TABLE_URL="url"
+JOBS_TABLE_TITLE="title"
+JOBS_TABLE_COMPANY="company"
+JOBS_TABLE_LOCATION="location"
+JOBS_TABLE_EXEC_SUMMARY="executive_summary"
+JOBS_TABLE_POSTED_AT="posted_at"
+JOBS_TABLE_ROLE_TYPE="role_type"
+JOBS_TABLE_IS_ACTIVE="is_active"
+JOBS_TABLE_IS_DELETED="is_deleted"
+
+
+SEARCH_SCHEDULE_TABLE="search_schedules"
+SEARCH_SCHEDULE_TABLE_ID="search_schedules_id"
+SEARCH_SCHEDULE_TABLE_LAST_RUN_ON="last_run_on"
+SEARCH_SCHEDULE_TABLE_TOTAL_FOUND_JOBS="total_found_jobs"
+SEARCH_SCHEDULE_TABLE_TOTAL_UNSEEEN_JOBS="total_unseen_jobs"
+SEARCH_SCHEDULE_TABLE_TOTAL_SAVED_JOBS="total_saved_jobs"
+SEARCH_SCHEDULE_TABLE_SAVED_JOBS_IDS="saved_jobs_ids"

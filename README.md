@@ -8,6 +8,58 @@ Instead of searching for opportunities repeatedly, the system continuously monit
 
 ---
 
+## Prerequisites
+
+Before running the project, create a `.env` file in the project root and add the following environment variables:
+
+- TAVILY_API_KEY=your_tavily_api_key
+- GROQ_API_KEY=your_groq_api_key
+- DB_CONNECTION_STR=your_render_external_database_connection_string
+- HF_TOKEN=your_huggingface_token
+
+
+## Installation
+
+**Step 1: Clone This Repository**
+
+```bash
+git clone git@github.com:dinok97/personal-opportunity-radar.git .
+
+**Step 2: Create a Virtual Environment**
+
+# Create a new virtual environment
+```bash
+python -m venv venv
+
+# Activate it
+
+# On macOS/Linux:
+```bash
+source venv/bin/activate
+
+# On Windows:
+```bash
+venv\Scripts\activate`
+
+
+**Step 3: Install Dependencies**
+```bash
+uv add -r requirements.txt
+
+
+### Run the Ingestion Pipeline
+
+1. Open the notebook:
+   `app/tests/test_job_ingestion.ipynb`
+
+2. Select the Python kernel:
+   - Click **Detect Kernel**
+   - Select **Python Environments**
+   - Choose the environment named **`career-lens (Python 3.12...)`**
+
+   > If the kernel does not appear the first time, close and reopen Visual Studio Code and try again.
+
+
 ## Goals
 
 The project focuses on three main capabilities:
