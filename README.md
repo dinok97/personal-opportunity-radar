@@ -24,28 +24,27 @@ Before running the project, create a `.env` file in the project root and add the
 
 ```bash
 git clone git@github.com:dinok97/personal-opportunity-radar.git .
+```
 
 **Step 2: Create a Virtual Environment**
 
-# Create a new virtual environment
 ```bash
+# Create a new virtual environment
 python -m venv venv
 
-# Activate it
+# Activate virtual environment
 
 # On macOS/Linux:
-```bash
 source venv/bin/activate
 
 # On Windows:
-```bash
-venv\Scripts\activate`
-
+venv\Scripts\activate
+```
 
 **Step 3: Install Dependencies**
 ```bash
 uv add -r requirements.txt
-
+```
 
 ### Run the Ingestion Pipeline
 
@@ -55,9 +54,7 @@ uv add -r requirements.txt
 2. Select the Python kernel:
    - Click **Detect Kernel**
    - Select **Python Environments**
-   - Choose the environment named **`career-lens (Python 3.12...)`**
-
-   > If the kernel does not appear the first time, close and reopen Visual Studio Code and try again.
+   - Choose the environment named **`career-lens (Python 3.12...)`** (If the kernel does not appear the first time, close and reopen Visual Studio Code and try again)
 
 
 ## Goals
