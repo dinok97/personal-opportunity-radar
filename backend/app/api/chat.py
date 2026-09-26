@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from ..config import get_settings
 from ..models import ChatMessage, ChatRequest, ChatResponse
+from ..ollama import OllamaClient, OllamaError
 from ..openrouter import OpenRouterClient, OpenRouterError
 from ..opportunities import find_opportunities
 
@@ -96,7 +97,17 @@ async def chat(request: Request) -> ChatResponse:
 
     settings = get_settings()
     source = "demo"
-    if settings.openrouter_api_key:
+    if settings.llm_provider == "ollama":
+        try:
+            message = await OllamaClient(settings).complete(
+                current_messages,
+                _job_context(jobs),
+            )
+            source = "ollama"
+        except OllamaError as exc:
+            logger.warning("Ollama request failed: %s", exc)
+            raise HTTPException(status_code=502, detail="The AI provider is unavailable") from exc
+    elif settings.openrouter_api_key:
         try:
             message = await OpenRouterClient(settings).complete(
                 current_messages,

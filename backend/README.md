@@ -1,6 +1,6 @@
 # Personal Opportunity Radar Backend
 
-FastAPI service for the live career assistant. It owns the OpenRouter API key and exposes a normalized chat API for the Next.js frontend.
+FastAPI service for the live career assistant. It exposes a normalized chat API for the Next.js frontend and supports OpenRouter or Ollama as the LLM provider.
 
 ## Local setup
 
@@ -11,14 +11,15 @@ pip install -e ".[test]"
 cp .env.example .env
 ```
 
-Add an OpenRouter key to `.env` to enable live responses:
+Set `LLM_PROVIDER` in `.env` to choose a provider. Ollama is the default:
 
 ```env
-OPENROUTER_API_KEY=your_key_here
-OPENROUTER_MODEL=openai/gpt-4o-mini
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=qwen3.5-2b
 ```
 
-Without a key, the API runs in demo mode with deterministic opportunity data.
+Ollama must be reachable from the backend. If the backend runs in a container, `localhost` points to that container; use an Ollama host address reachable from it instead. If OpenRouter is selected without an API key, the API runs in demo mode with deterministic opportunity data. Errors from a selected live provider return HTTP 502; the backend does not switch providers automatically.
 
 ## Run
 

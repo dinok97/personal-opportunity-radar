@@ -31,5 +31,5 @@ class JobMatch(BaseModel):
 class ChatResponse(BaseModel):
     message: str
     jobs: list[JobMatch] = Field(default_factory=list)
-    source: Literal["openrouter", "demo"]
+    source: Literal["openrouter", "ollama", "demo"]
     file_name: str | None = None
