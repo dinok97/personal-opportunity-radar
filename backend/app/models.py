@@ -33,3 +33,5 @@ class ChatResponse(BaseModel):
     jobs: list[JobMatch] = Field(default_factory=list)
     source: Literal["openrouter", "ollama", "demo"]
     file_name: str | None = None
+    cv_uploaded: bool = False
+    document_id: str | None = None
