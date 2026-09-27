@@ -136,6 +136,47 @@ def test_invalid_llm_provider_is_rejected() -> None:
         Settings(llm_provider="unsupported")
 
 
+def test_cv_vector_settings_have_independent_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.ollama_embedding_model == "nomic-embed-text"
+    assert settings.ollama_embedding_base_url == "http://localhost:11434"
+    assert settings.ollama_embedding_model != settings.ollama_model
+    assert settings.pgvector_connection_string is None
+    assert settings.pgvector_table_name == "cv_chunks"
+    assert settings.pgvector_embedding_dimension == 768
+
+
+def test_cv_vector_settings_can_be_overridden_by_environment(monkeypatch) -> None:
+    monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "custom-embedder")
+    monkeypatch.setenv("OLLAMA_EMBEDDING_BASE_URL", "http://ollama:11434")
+    monkeypatch.setenv("PGVECTOR_CONNECTION_STRING", "postgresql://db/cv")
+    monkeypatch.setenv("PGVECTOR_TABLE_NAME", "candidate_cv_chunks")
+    monkeypatch.setenv("PGVECTOR_EMBEDDING_DIMENSION", "1024")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.ollama_embedding_model == "custom-embedder"
+    assert settings.ollama_embedding_base_url == "http://ollama:11434"
+    assert settings.pgvector_connection_string == "postgresql://db/cv"
+    assert settings.pgvector_table_name == "candidate_cv_chunks"
+    assert settings.pgvector_embedding_dimension == 1024
+
+
+@pytest.mark.parametrize(
+    "settings_kwargs",
+    [
+        {"pgvector_embedding_dimension": 0},
+        {"pgvector_table_name": "cv-chunks"},
+        {"pgvector_table_name": "1cv_chunks"},
+        {"pgvector_connection_string": ""},
+    ],
+)
+def test_invalid_cv_vector_settings_are_rejected(settings_kwargs) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **settings_kwargs)
+
+
 def test_empty_chat_request_is_rejected() -> None:
     response = client.post("/api/chat", json={"prompt": "", "messages": []})
 
