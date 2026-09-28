@@ -2,38 +2,29 @@
 
 ## Run Locally
 
-Start the backend and frontend in separate terminal windows.
+Start the backend and frontend in separate terminal.
 
 ### 1. Start the backend
 
 From the repository root:
 
 ```bash
-cd backend/openrouter
+cd backend
 source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+pip install -e ".[test]"
 ```
 
-The backend provides:
-
-- Health check: `http://localhost:8000/health`
-- Chat API: `http://localhost:8000/api/chat`
-
-Before starting the backend, copy the environment template if needed:
+Before starting the backend, copy the environment template and fill the value accordingly:
 
 ```bash
-cd backend/openrouter
 cp .env.example .env
 ```
 
-Add your OpenRouter key to `backend/openrouter/.env`:
+Finally, run the backend by command:
 
-```env
-OPENROUTER_API_KEY=your_key_here
-OPENROUTER_MODEL=openai/gpt-4o-mini
+```bash
+uvicorn app.main:app --reload --port 8000
 ```
-
-Without an API key, the backend runs in demo mode with deterministic sample opportunities.
 
 ### 2. Start the frontend
 
