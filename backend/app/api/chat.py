@@ -1,13 +1,24 @@
 import json
 import logging
+from uuid import uuid4
 
+import psycopg
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 from pydantic import ValidationError
 
 from ..config import get_settings
 from ..models import ChatMessage, ChatRequest, ChatResponse
+from ..ollama import OllamaClient, OllamaError
 from ..openrouter import OpenRouterClient, OpenRouterError
 from ..opportunities import find_opportunities
+from ..repositories.cv_vector_repository import (
+    CvVectorConfigurationError,
+    CvVectorDimensionError,
+    CvVectorSchemaError,
+)
+from ..services.cv_chunking import CvChunk, chunk_cv_pages
+from ..services.cv_pdf_extraction import CvPdfExtractionError, extract_pdf_pages
+from ..services.cv_vector_service import CvEmbeddingError, CvVectorService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -32,7 +43,7 @@ def _parse_messages(raw_messages: str | None) -> list[ChatMessage]:
         raise HTTPException(status_code=400, detail="messages must be a valid JSON array") from exc
 
 
-async def _read_pdf_metadata(upload: UploadFile | None) -> str | None:
+async def _read_pdf(upload: UploadFile | None) -> tuple[str, bytes] | None:
     if upload is None:
         return None
 
@@ -45,7 +56,7 @@ async def _read_pdf_metadata(upload: UploadFile | None) -> str | None:
     if len(content) > MAX_PDF_BYTES:
         raise HTTPException(status_code=413, detail="PDF must be 10 MB or smaller")
 
-    return file_name
+    return file_name, content
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -81,7 +92,26 @@ async def chat(request: Request) -> ChatResponse:
     if not clean_prompt and not history and file is None:
         raise HTTPException(status_code=400, detail="prompt, messages, or a PDF file is required")
 
-    file_name = await _read_pdf_metadata(file)
+    pdf_upload = await _read_pdf(file)
+    file_name = pdf_upload[0] if pdf_upload else None
+    cv_chunks: list[CvChunk] = []
+    document_id: str | None = None
+    if pdf_upload:
+        file_name, pdf_content = pdf_upload
+        try:
+            pages = extract_pdf_pages(pdf_content)
+        except CvPdfExtractionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        document_id = str(uuid4())
+        cv_chunks = chunk_cv_pages(
+            pages,
+            document_id=document_id,
+            filename=file_name,
+        )
+        if not cv_chunks:
+            raise HTTPException(status_code=422, detail="The PDF contains no text to store")
+
     jobs = find_opportunities(clean_prompt or "all")
     current_messages = [*history]
     if clean_prompt:
@@ -96,7 +126,17 @@ async def chat(request: Request) -> ChatResponse:
 
     settings = get_settings()
     source = "demo"
-    if settings.openrouter_api_key:
+    if settings.llm_provider == "ollama":
+        try:
+            message = await OllamaClient(settings).complete(
+                current_messages,
+                _job_context(jobs),
+            )
+            source = "ollama"
+        except OllamaError as exc:
+            logger.warning("Ollama request failed: %s", exc)
+            raise HTTPException(status_code=502, detail="The AI provider is unavailable") from exc
+    elif settings.openrouter_api_key:
         try:
             message = await OpenRouterClient(settings).complete(
                 current_messages,
@@ -112,7 +152,30 @@ async def chat(request: Request) -> ChatResponse:
             "Add OPENROUTER_API_KEY to enable live responses."
         )
 
+    if cv_chunks:
+        try:
+            CvVectorService(settings).replace_active_cv(cv_chunks)
+        except (
+            CvEmbeddingError,
+            CvVectorConfigurationError,
+            CvVectorDimensionError,
+            CvVectorSchemaError,
+            psycopg.Error,
+        ) as exc:
+            logger.exception("CV upload could not be persisted")
+            raise HTTPException(
+                status_code=503,
+                detail="CV storage is unavailable",
+            ) from exc
+
     if file_name:
         message = f"I received {file_name}. {message}"
 
-    return ChatResponse(message=message, jobs=jobs, source=source, file_name=file_name)
+    return ChatResponse(
+        message=message,
+        jobs=jobs,
+        source=source,
+        file_name=file_name,
+        cv_uploaded=bool(cv_chunks),
+        document_id=document_id if cv_chunks else None,
+    )

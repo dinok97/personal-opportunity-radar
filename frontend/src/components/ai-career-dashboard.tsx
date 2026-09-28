@@ -10,6 +10,14 @@ type ChatMessage = {
   jobs?: JobMatch[];
 };
 
+type ChatApiResponse = {
+  message?: string;
+  jobs?: JobMatch[];
+  detail?: string;
+  cv_uploaded?: boolean;
+  document_id?: string | null;
+};
+
 const defaultJobs = jobMatches.slice(0, 3);
 
 export function AICareerDashboard() {
@@ -25,6 +33,7 @@ export function AICareerDashboard() {
   const [draft, setDraft] = useState("");
   const [selectedJob, setSelectedJob] = useState<JobMatch | null>(defaultJobs[0]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -77,7 +86,7 @@ export function AICareerDashboard() {
     const userMessage: ChatMessage = {
       id: nextMessageId("user"),
       role: "user",
-      content: fileToSend ? `Uploaded PDF: ${fileToSend.name}${cleanPrompt ? `\n\n${cleanPrompt}` : ""}` : cleanPrompt,
+      content: fileToSend ? `Attached PDF: ${fileToSend.name}${cleanPrompt ? `\n\n${cleanPrompt}` : ""}` : cleanPrompt,
     };
     const requestMessages = [...messages, userMessage];
 
@@ -88,6 +97,7 @@ export function AICareerDashboard() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+    setIsUploadingCv(Boolean(fileToSend));
     setIsLoading(true);
 
     try {
@@ -116,9 +126,12 @@ export function AICareerDashboard() {
         });
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as ChatApiResponse;
       if (!response.ok) {
         throw new Error(data.detail || data.message || "The chat service is unavailable.");
+      }
+      if (fileToSend && (data.cv_uploaded !== true || !data.document_id)) {
+        throw new Error("The backend did not confirm that this CV was stored. Please try again.");
       }
 
       const assistantMessage: ChatMessage = {
@@ -136,6 +149,9 @@ export function AICareerDashboard() {
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "The chat service is unavailable.";
+      if (fileToSend) {
+        setSelectedFile(fileToSend);
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -146,6 +162,7 @@ export function AICareerDashboard() {
         },
       ]);
     } finally {
+      setIsUploadingCv(false);
       setIsLoading(false);
     }
   }
@@ -281,7 +298,9 @@ export function AICareerDashboard() {
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-sm text-slate-500">
-                    Searching opportunities and comparing them with your profile...
+                    {isUploadingCv
+                      ? "Uploading your CV and searching opportunities..."
+                      : "Searching opportunities and comparing them with your profile..."}
                   </div>
                 </div>
               )}
