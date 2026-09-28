@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 45.0
     ollama_model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434/v1"
-    ollama_embedding_model: str = "nomic-embed-text"
-    ollama_embedding_base_url: str = "http://localhost:11434"
+    embedding_model: str = "jinaai/jina-embeddings-v5-text-nano"
+    embedding_model_revision: str = "8a7f00a"
     pgvector_connection_string: str | None = Field(default=None, min_length=1)
     pgvector_table_name: str = Field(default="cv_chunks", pattern=r"^[a-z_][a-z0-9_]*$")
     pgvector_embedding_dimension: int = Field(default=768, gt=0)

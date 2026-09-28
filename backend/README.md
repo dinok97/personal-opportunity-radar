@@ -19,24 +19,19 @@ OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen3.5-2b
 ```
 
-Ollama must be reachable from the backend. If the backend runs in a container, `localhost` points to that container; use an Ollama host address reachable from it instead. If OpenRouter is selected without an API key, the API runs in demo mode with deterministic opportunity data. Errors from a selected live provider return HTTP 502; the backend does not switch providers automatically.
+Ollama must be reachable from the backend. If the backend runs in a container, `localhost` points to that container; use an Ollama host address reachable from it instead. Pull the configured Ollama model with `ollama pull <OLLAMA_MODEL>`. If OpenRouter is selected without an API key, the API runs in demo mode with deterministic opportunity data. Errors from a selected live provider return HTTP 502; the backend does not switch providers automatically.
 
-CV storage uses a separate Ollama embedding model and a dedicated PGVector table. Configure these values in `backend/.env`:
+CV storage uses a local Hugging Face embedding model and a dedicated PGVector table. Configure these values in `backend/.env`:
 
 ```env
 PGVECTOR_CONNECTION_STRING=postgresql+psycopg://user:password@localhost:5432/opportunity_radar
 PGVECTOR_TABLE_NAME=cv_chunks
 PGVECTOR_EMBEDDING_DIMENSION=768
-OLLAMA_EMBEDDING_MODEL=nomic-embed-text
-OLLAMA_EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_MODEL=jinaai/jina-embeddings-v5-text-nano
+EMBEDDING_MODEL_REVISION=8a7f00a
 ```
 
-The backend must be able to reach PostgreSQL and Ollama. Pull both configured models before uploading:
-
-```bash
-ollama pull <OLLAMA_MODEL>
-ollama pull <OLLAMA_EMBEDDING_MODEL>
-```
+The model is downloaded from Hugging Face the first time a CV is uploaded and runs locally through `sentence-transformers`. The default model produces 768-dimensional vectors. It is licensed under CC BY-NC 4.0, which does not permit commercial use without permission from Jina AI.
 
 Enable the PGVector extension in the database before the first upload:
 
@@ -44,7 +39,7 @@ Enable the PGVector extension in the database before the first upload:
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-The backend creates and validates the configured vector table on upload. Its database role therefore needs permission to create tables in the selected schema. Set `PGVECTOR_EMBEDDING_DIMENSION` to the output dimension of the selected embedding model; a mismatch prevents writes.
+The backend must be able to reach PostgreSQL and Hugging Face on first use. It creates and validates the configured vector table on upload. Its database role therefore needs permission to create tables in the selected schema. Set `PGVECTOR_EMBEDDING_DIMENSION` to the output dimension of the selected embedding model; a mismatch prevents writes.
 
 ## CV upload and data handling
 
