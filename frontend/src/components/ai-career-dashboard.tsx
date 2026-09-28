@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { jobMatches, type JobMatch, userProfile } from "@/lib/mock-data";
+import { jobMatches, type JobMatch } from "@/lib/mock-data";
+import type { UserProfile } from "@/lib/user-profile";
 
 type ChatMessage = {
   id: string;
@@ -18,15 +19,28 @@ type ChatApiResponse = {
   document_id?: string | null;
 };
 
+type UserProfileResponse = UserProfile & { detail?: string };
+
 const defaultJobs = jobMatches.slice(0, 3);
+
+async function requestUserProfile(signal?: AbortSignal): Promise<UserProfile | null> {
+  const response = await fetch("/api/user", { cache: "no-store", signal });
+  const data = (await response.json().catch(() => ({}))) as UserProfileResponse;
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(data.detail || "The profile service is unavailable.");
+  }
+
+  return data;
+}
 
 export function AICareerDashboard() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      content:
-        "Hi Alicia — I reviewed your profile and can help you find internship and full-time roles that match your ML and LLM background.",
+      content: "Hi, I can help you explore opportunities. Ask a question or upload your CV to get started.",
       jobs: defaultJobs,
     },
   ]);
@@ -36,6 +50,11 @@ export function AICareerDashboard() {
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [profileStatus, setProfileStatus] = useState<"loading" | "ready" | "missing" | "error">(
+    "loading"
+  );
+  const [profileError, setProfileError] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const messageIdRef = useRef(0);
@@ -50,6 +69,26 @@ export function AICareerDashboard() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void requestUserProfile(controller.signal)
+      .then((profile) => {
+        setUserProfile(profile);
+        setProfileStatus(profile ? "ready" : "missing");
+        setProfileError("");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setProfileStatus("error");
+        setProfileError(
+          error instanceof Error ? error.message : "The profile service is unavailable."
+        );
+      });
+
+    return () => controller.abort();
+  }, []);
 
   const validatePdfFile = (file: File | null) => {
     if (!file) return true;
@@ -134,6 +173,20 @@ export function AICareerDashboard() {
         throw new Error("The backend did not confirm that this CV was stored. Please try again.");
       }
 
+      if (fileToSend) {
+        try {
+          const profile = await requestUserProfile();
+          setUserProfile(profile);
+          setProfileStatus(profile ? "ready" : "missing");
+          setProfileError("");
+        } catch (error) {
+          setProfileStatus("error");
+          setProfileError(
+            error instanceof Error ? error.message : "The profile service is unavailable."
+          );
+        }
+      }
+
       const assistantMessage: ChatMessage = {
         id: nextMessageId("assistant"),
         role: "assistant",
@@ -172,6 +225,14 @@ export function AICareerDashboard() {
     "Show AI internships in Berlin",
     "Compare me with LLM roles",
   ];
+  const profileInitials =
+    userProfile?.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "?";
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] text-[#111827]">
@@ -210,15 +271,29 @@ export function AICareerDashboard() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Profile</p>
             <div className="mt-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e5e7eb] text-xs font-semibold text-slate-700">
-                AM
+                {profileInitials}
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-900">{userProfile.name}</p>
-                <p className="text-xs text-slate-500">{userProfile.role}</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {userProfile?.name ||
+                    (profileStatus === "loading"
+                      ? "Loading profile"
+                      : profileStatus === "missing"
+                        ? "No CV profile"
+                        : "Profile unavailable")}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {userProfile?.role ||
+                    (profileStatus === "missing"
+                      ? "Upload a CV to get started"
+                      : profileStatus === "error"
+                        ? profileError
+                        : " ")}
+                </p>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              {userProfile.topSkills.slice(0, 4).map((skill) => (
+              {userProfile?.topSkills.slice(0, 4).map((skill) => (
                 <span key={skill} className="rounded-full border border-[#e5e7eb] bg-white px-2 py-1 text-[10px] text-slate-600">
                   {skill}
                 </span>

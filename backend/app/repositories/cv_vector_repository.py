@@ -2,9 +2,11 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from langchain_postgres import PGVector
+from pydantic import ValidationError
 from sqlalchemy import delete
 
 from ..config import Settings
+from ..models import UserProfile
 from ..services.cv_chunking import CvChunk
 
 
@@ -25,7 +27,7 @@ class CvVectorRepository:
         self,
         settings: Settings,
         *,
-        embeddings: Any,
+        embeddings: Any | None = None,
         vector_store_factory: Callable[..., PGVector] = PGVector,
     ) -> None:
         if not settings.pgvector_connection_string:
@@ -53,6 +55,61 @@ class CvVectorRepository:
 
     def setup(self) -> None:
         self.vector_store
+
+    def get_active_cv_chunks(self) -> list[CvChunk]:
+        vector_store = self.vector_store
+        embedding_store = getattr(vector_store, "EmbeddingStore")
+        with vector_store.session_maker() as session:
+            collection = vector_store.get_collection(session)
+            if collection is None:
+                return []
+            rows = (
+                session.query(embedding_store)
+                .filter(embedding_store.collection_id == collection.uuid)
+                .all()
+            )
+
+        rows.sort(
+            key=lambda row: (
+                (row.cmetadata or {}).get("page_number", 0),
+                (row.cmetadata or {}).get("chunk_index", 0),
+                row.id,
+            )
+        )
+        return [
+            CvChunk(
+                id=row.id,
+                content=row.document or "",
+                metadata=dict(row.cmetadata or {}),
+            )
+            for row in rows
+        ]
+
+    def get_cached_user_profile(self) -> UserProfile | None:
+        vector_store = self.vector_store
+        with vector_store.session_maker() as session:
+            collection = vector_store.get_collection(session)
+            profile_data = (collection.cmetadata or {}).get("user_profile") if collection else None
+
+        if not isinstance(profile_data, dict):
+            return None
+        try:
+            return UserProfile.model_validate(profile_data)
+        except ValidationError:
+            return None
+
+    def save_user_profile(self, profile: UserProfile) -> None:
+        vector_store = self.vector_store
+        with vector_store.session_maker() as session:
+            with session.begin():
+                collection = vector_store.get_collection(session)
+                if collection is None:
+                    raise CvVectorSchemaError(
+                        f"Collection '{self.collection_name}' was not initialized"
+                    )
+                collection_metadata = dict(collection.cmetadata or {})
+                collection_metadata["user_profile"] = profile.model_dump(mode="json")
+                collection.cmetadata = collection_metadata
 
     def replace_active_cv(
         self,
@@ -89,6 +146,9 @@ class CvVectorRepository:
                     raise CvVectorSchemaError(
                         f"Collection '{self.collection_name}' was not initialized"
                     )
+                collection_metadata = dict(collection.cmetadata or {})
+                if collection_metadata.pop("user_profile", None) is not None:
+                    collection.cmetadata = collection_metadata
                 for chunk, embedding in zip(chunks, embeddings):
                     session.merge(
                         embedding_store(

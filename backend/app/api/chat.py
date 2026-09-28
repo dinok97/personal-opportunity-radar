@@ -15,6 +15,7 @@ from ..repositories.cv_vector_repository import (
     CvVectorConfigurationError,
     CvVectorDimensionError,
     CvVectorSchemaError,
+    CvVectorRepository,
 )
 from ..services.cv_chunking import CvChunk, chunk_cv_pages
 from ..services.cv_pdf_extraction import CvPdfExtractionError, extract_pdf_pages
@@ -26,11 +27,15 @@ router = APIRouter(prefix="/api")
 MAX_PDF_BYTES = 10 * 1024 * 1024
 
 
-def _job_context(jobs: list) -> str:
-    return "\n".join(
+def _job_context(jobs: list, user_profile=None) -> str:
+    sections = []
+    if user_profile is not None:
+        sections.append(f"User profile:\n{user_profile.model_dump_json(indent=2)}")
+    sections.append("Job opportunities:\n" + "\n".join(
         f"- {job.title} at {job.company}: {job.location}; {job.type}; skills: {', '.join(job.tags)}"
         for job in jobs
-    )
+    ))
+    return "\n\n".join(sections)
 
 
 def _parse_messages(raw_messages: str | None) -> list[ChatMessage]:
@@ -125,12 +130,19 @@ async def chat(request: Request) -> ChatResponse:
         )
 
     settings = get_settings()
+    user_profile = None
+    if settings.pgvector_connection_string:
+        try:
+            user_profile = CvVectorRepository(settings).get_cached_user_profile()
+        except (CvVectorConfigurationError, CvVectorSchemaError, SQLAlchemyError):
+            logger.warning("Could not load the cached user profile for chat", exc_info=True)
+    context = _job_context(jobs, user_profile)
     source = "demo"
     if settings.llm_provider == "ollama":
         try:
             message = await OllamaClient(settings).complete(
                 current_messages,
-                _job_context(jobs),
+                context,
             )
             source = "ollama"
         except OllamaError as exc:
@@ -140,7 +152,7 @@ async def chat(request: Request) -> ChatResponse:
         try:
             message = await OpenRouterClient(settings).complete(
                 current_messages,
-                _job_context(jobs),
+                context,
             )
             source = "openrouter"
         except OpenRouterError as exc:

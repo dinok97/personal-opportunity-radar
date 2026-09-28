@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChatMessage(BaseModel):
@@ -35,3 +35,16 @@ class ChatResponse(BaseModel):
     file_name: str | None = None
     cv_uploaded: bool = False
     document_id: str | None = None
+
+
+class UserProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = ""
+    role: str = ""
+    email: str = ""
+    location: str = ""
+    availability: str = ""
+    topSkills: list[str] = Field(default_factory=list)
+    interests: list[str] = Field(default_factory=list)
+    profileSummary: str = ""

@@ -13,18 +13,6 @@ export type JobMatch = {
   source: string;
 };
 
-export const userProfile = {
-  name: "Alicia Morgan",
-  role: "ML Engineer",
-  email: "alicia@careerflow.ai",
-  location: "Berlin, Germany",
-  availability: "Open to internships and full-time",
-  topSkills: ["Python", "Machine Learning", "NLP", "SQL", "LLMs", "Research"],
-  interests: ["AI products", "LLM systems", "Data science", "Career growth"],
-  profileSummary:
-    "ML engineer with experience in NLP, experimentation, and applied AI systems. Looking for roles that combine research, product thinking, and strong engineering execution.",
-};
-
 export const jobMatches: JobMatch[] = [
   {
     id: "job-1",
@@ -126,7 +114,7 @@ export function createMockResponse(prompt: string) {
 
   return {
     message:
-      `I checked your profile and the latest opportunities. I found ${selectedJobs.length} promising matches that align with your background in ${userProfile.topSkills.slice(0, 3).join(", ")}.`,
+      `I found ${selectedJobs.length} promising opportunities. Refine your search by role, location, or skills to narrow the list.`,
     jobs: selectedJobs.slice(0, 3),
   };
 }
