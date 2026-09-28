@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -53,8 +55,8 @@ def make_settings() -> Settings:
         _env_file=None,
         pgvector_connection_string="postgresql://db/cv",
         pgvector_embedding_dimension=3,
-        ollama_embedding_model="custom-embedding-model",
-        ollama_embedding_base_url="http://ollama:11434",
+        embedding_model="custom-embedding-model",
+        embedding_model_revision="custom-revision",
     )
 
 
@@ -126,21 +128,42 @@ def test_cv_vector_service_does_not_call_embedding_or_storage_for_empty_chunks()
     assert repository.replacement is None
 
 
-def test_cv_vector_service_uses_configured_embedding_model(monkeypatch) -> None:
+def test_cv_vector_service_uses_configured_hugging_face_model(monkeypatch) -> None:
     captured = {}
 
-    class FakeOllamaEmbeddings:
-        def __init__(self, *, model, base_url):
-            captured.update(model=model, base_url=base_url)
+    class FakeHuggingFaceEmbeddings:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
 
-    monkeypatch.setattr(
-        "backend.app.services.cv_vector_service.OllamaEmbeddings",
-        FakeOllamaEmbeddings,
+        def embed_documents(self, texts):
+            captured["texts"] = texts
+            return [[0.1, 0.2, 0.3]]
+
+    monkeypatch.setitem(
+        sys.modules,
+        "langchain_huggingface",
+        SimpleNamespace(HuggingFaceEmbeddings=FakeHuggingFaceEmbeddings),
     )
 
-    CvVectorService(make_settings(), repository=FakeRepository())
+    service = CvVectorService(make_settings(), repository=FakeRepository())
+    vectors = service.embeddings.embed_documents(["CV text"])
 
+    assert vectors == [[0.1, 0.2, 0.3]]
     assert captured == {
-        "model": "custom-embedding-model",
-        "base_url": "http://ollama:11434",
+        "model_name": "custom-embedding-model",
+        "model_kwargs": {
+            "revision": "custom-revision",
+            "trust_remote_code": True,
+            "model_kwargs": {"default_task": "retrieval"},
+        },
+        "encode_kwargs": {
+            "task": "retrieval",
+            "prompt_name": "document",
+            "convert_to_numpy": True,
+        },
+        "query_encode_kwargs": {
+            "normalize_embeddings": True,
+            "prompt_name": "query",
+        },
+        "texts": ["CV text"],
     }

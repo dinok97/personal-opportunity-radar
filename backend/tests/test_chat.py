@@ -1,10 +1,10 @@
 import asyncio
 
 import httpx
-import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app.config import Settings, get_settings
 from backend.app.main import app
@@ -191,27 +191,26 @@ def test_invalid_llm_provider_is_rejected() -> None:
 def test_cv_vector_settings_have_independent_defaults() -> None:
     settings = Settings(_env_file=None)
 
-    assert settings.ollama_embedding_model == "nomic-embed-text"
-    assert settings.ollama_embedding_base_url == "http://localhost:11434"
-    assert settings.ollama_embedding_model != settings.ollama_model
+    assert settings.embedding_model == "jinaai/jina-embeddings-v5-text-nano"
+    assert settings.embedding_model_revision == "8a7f00a"
     assert settings.pgvector_connection_string is None
-    assert settings.pgvector_table_name == "cv_chunks"
+    assert settings.pgvector_collection_name == "cv_chunks"
     assert settings.pgvector_embedding_dimension == 768
 
 
 def test_cv_vector_settings_can_be_overridden_by_environment(monkeypatch) -> None:
-    monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "custom-embedder")
-    monkeypatch.setenv("OLLAMA_EMBEDDING_BASE_URL", "http://ollama:11434")
+    monkeypatch.setenv("EMBEDDING_MODEL", "custom-embedder")
+    monkeypatch.setenv("EMBEDDING_MODEL_REVISION", "custom-revision")
     monkeypatch.setenv("PGVECTOR_CONNECTION_STRING", "postgresql://db/cv")
-    monkeypatch.setenv("PGVECTOR_TABLE_NAME", "candidate_cv_chunks")
+    monkeypatch.setenv("PGVECTOR_COLLECTION_NAME", "candidate_cv_chunks")
     monkeypatch.setenv("PGVECTOR_EMBEDDING_DIMENSION", "1024")
 
     settings = Settings(_env_file=None)
 
-    assert settings.ollama_embedding_model == "custom-embedder"
-    assert settings.ollama_embedding_base_url == "http://ollama:11434"
+    assert settings.embedding_model == "custom-embedder"
+    assert settings.embedding_model_revision == "custom-revision"
     assert settings.pgvector_connection_string == "postgresql://db/cv"
-    assert settings.pgvector_table_name == "candidate_cv_chunks"
+    assert settings.pgvector_collection_name == "candidate_cv_chunks"
     assert settings.pgvector_embedding_dimension == 1024
 
 
@@ -219,8 +218,8 @@ def test_cv_vector_settings_can_be_overridden_by_environment(monkeypatch) -> Non
     "settings_kwargs",
     [
         {"pgvector_embedding_dimension": 0},
-        {"pgvector_table_name": "cv-chunks"},
-        {"pgvector_table_name": "1cv_chunks"},
+        {"pgvector_collection_name": "cv-chunks"},
+        {"pgvector_collection_name": "1cv_chunks"},
         {"pgvector_connection_string": ""},
     ],
 )
@@ -315,7 +314,7 @@ def test_oversized_pdf_is_rejected(monkeypatch) -> None:
     [
         CvEmbeddingError("Ollama unavailable"),
         CvVectorConfigurationError("PGVECTOR_CONNECTION_STRING is not configured"),
-        psycopg.OperationalError("database unavailable"),
+            SQLAlchemyError("database unavailable"),
     ],
 )
 def test_cv_storage_failure_does_not_report_upload_success(monkeypatch, storage_error) -> None:

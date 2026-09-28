@@ -1,22 +1,16 @@
 from collections.abc import Sequence
-from typing import Protocol
-
-from langchain_ollama import OllamaEmbeddings
 
 from ..config import Settings
 from ..repositories.cv_vector_repository import (
     CvVectorDimensionError,
     CvVectorRepository,
 )
+from .embedding_service import EmbeddingClient, HuggingFaceEmbeddingClient
 from .cv_chunking import CvChunk
 
 
-class EmbeddingClient(Protocol):
-    def embed_documents(self, texts: list[str]) -> list[list[float]]: ...
-
-
 class CvEmbeddingError(RuntimeError):
-    """Ollama could not create embeddings for the CV chunks."""
+    """The configured model could not create embeddings for the CV chunks."""
 
 
 class CvVectorService:
@@ -28,11 +22,11 @@ class CvVectorService:
         embeddings: EmbeddingClient | None = None,
     ) -> None:
         self.embedding_dimension = settings.pgvector_embedding_dimension
-        self.repository = repository or CvVectorRepository(settings)
-        self.embeddings = embeddings or OllamaEmbeddings(
-            model=settings.ollama_embedding_model,
-            base_url=settings.ollama_embedding_base_url,
+        self.embeddings = embeddings or HuggingFaceEmbeddingClient(
+            settings.embedding_model,
+            settings.embedding_model_revision,
         )
+        self.repository = repository or CvVectorRepository(settings, embeddings=self.embeddings)
 
     def setup(self) -> None:
         self.repository.setup()
@@ -42,7 +36,9 @@ class CvVectorService:
             raise ValueError("At least one CV chunk is required")
 
         try:
+            print("Generating embeddings for CV chunks...")
             vectors = self.embeddings.embed_documents([chunk.content for chunk in chunks])
+            print(f"Generated {len(vectors)} embeddings for {len(chunks)} CV chunks.")
         except Exception as exc:
             raise CvEmbeddingError("Could not generate CV embeddings") from exc
 

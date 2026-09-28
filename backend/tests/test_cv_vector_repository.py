@@ -1,47 +1,54 @@
 import os
 import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
-import psycopg
 import pytest
-from psycopg import sql
+from sqlalchemy import JSON
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from backend.app.config import Settings
 from backend.app.repositories.cv_vector_repository import (
+    CvVectorConfigurationError,
     CvVectorDimensionError,
     CvVectorRepository,
-    CvVectorSchemaError,
 )
 from backend.app.services.cv_chunking import CvChunk
 
 
-EXPECTED_COLUMNS = [
-    ("id", "text", "text"),
-    ("document_id", "text", "text"),
-    ("content", "text", "text"),
-    ("embedding", "USER-DEFINED", "vector"),
-    ("metadata", "jsonb", "jsonb"),
-]
+class FakeBase(DeclarativeBase):
+    pass
 
 
-class FakeCursor:
-    def __init__(self, rows=()):
-        self.rows = list(rows)
+class FakeEmbeddingStore(FakeBase):
+    __tablename__ = "fake_langchain_pg_embedding"
 
-    def fetchall(self):
-        return self.rows
+    id: Mapped[str] = mapped_column(primary_key=True)
+    collection_id: Mapped[str] = mapped_column()
+    embedding: Mapped[list] = mapped_column(JSON)
+    document: Mapped[str] = mapped_column()
+    cmetadata: Mapped[dict] = mapped_column(JSON)
 
-    def fetchone(self):
-        return self.rows[0] if self.rows else None
+
+class FakeTransaction:
+    def __init__(self, session):
+        self.session = session
+
+    def __enter__(self):
+        return self.session
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.session.committed = exc_type is None
+        self.session.rolled_back = exc_type is not None
+        return False
 
 
-class FakeConnection:
-    def __init__(self, *, embedding_type="vector(3)", fail_insert_number=None):
-        self.embedding_type = embedding_type
-        self.fail_insert_number = fail_insert_number
-        self.insert_count = 0
-        self.table_create_count = 0
-        self.events = []
+class FakeSession:
+    def __init__(self, fail_merge_number=None):
+        self.fail_merge_number = fail_merge_number
+        self.merged = []
+        self.statements = []
         self.committed = False
         self.rolled_back = False
 
@@ -49,44 +56,62 @@ class FakeConnection:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.committed = exc_type is None
-        self.rolled_back = exc_type is not None
         return False
 
-    def execute(self, query, parameters=None):
-        if isinstance(query, str) and "information_schema.columns" in query:
-            return FakeCursor(EXPECTED_COLUMNS)
-        if isinstance(query, str) and "format_type" in query:
-            return FakeCursor([(self.embedding_type,)])
-        if isinstance(query, sql.Composed) and parameters is None:
-            self.table_create_count += 1
-        if isinstance(query, sql.Composed) and parameters and len(parameters) == 5:
-            self.insert_count += 1
-            self.events.append("insert")
-            if self.insert_count == self.fail_insert_number:
-                raise psycopg.OperationalError("injected write failure")
-        elif isinstance(query, sql.Composed) and parameters and len(parameters) == 2:
-            self.events.append("delete-stale")
-        elif isinstance(query, sql.Composed) and parameters and len(parameters) == 1:
-            self.events.append("delete-old")
-        return FakeCursor()
+    def begin(self):
+        return FakeTransaction(self)
+
+    def merge(self, record):
+        self.merged.append(record)
+        if len(self.merged) == self.fail_merge_number:
+            raise SQLAlchemyError("injected write failure")
+
+    def flush(self):
+        pass
+
+    def execute(self, statement):
+        self.statements.append(statement)
+
+
+class FakeVectorStore:
+    def __init__(self, *, fail_merge_number=None):
+        self.EmbeddingStore = FakeEmbeddingStore
+        self.session = FakeSession(fail_merge_number)
+        self.session_maker = lambda: self.session
+        self.collection = SimpleNamespace(uuid="collection-id")
+
+    def get_collection(self, session):
+        return self.collection
+
+
+class FakeEmbeddings:
+    def embed_documents(self, texts):
+        return [[0.1, 0.2, 0.3] for _ in texts]
 
 
 def make_settings(table_name="cv_chunks", connection_string="postgresql://db/cv"):
     return Settings(
         _env_file=None,
         pgvector_connection_string=connection_string,
-        pgvector_table_name=table_name,
+        pgvector_collection_name=table_name,
         pgvector_embedding_dimension=3,
     )
 
 
-def make_repository(connection, *, settings=None):
-    return CvVectorRepository(
+def make_repository(*, settings=None, store=None, fail_merge_number=None):
+    store = store or FakeVectorStore(fail_merge_number=fail_merge_number)
+    captured = {}
+
+    def vector_store_factory(**kwargs):
+        captured.update(kwargs)
+        return store
+
+    repository = CvVectorRepository(
         settings or make_settings(),
-        connection_factory=lambda connection_string: connection,
-        vector_registrar=lambda connection: None,
+        embeddings=FakeEmbeddings(),
+        vector_store_factory=vector_store_factory,
     )
+    return repository, store, captured
 
 
 def make_chunk(document_id="new-cv", chunk_id="chunk-1", page_number=1):
@@ -103,76 +128,64 @@ def make_chunk(document_id="new-cv", chunk_id="chunk-1", page_number=1):
     )
 
 
-def test_repository_setup_is_idempotent_and_checks_table_dimension() -> None:
-    connection = FakeConnection()
-    repository = make_repository(connection)
+def test_repository_setup_is_idempotent_and_configures_langchain_store() -> None:
+    repository, store, captured = make_repository()
 
     repository.setup()
     repository.setup()
 
-    assert connection.committed
-    assert connection.table_create_count == 2
+    assert repository.vector_store is store
+    assert captured == {
+        "embeddings": repository.embeddings,
+        "connection": "postgresql+psycopg://db/cv",
+        "collection_name": "cv_chunks",
+        "embedding_length": 3,
+    }
 
 
-def test_repository_setup_rejects_incompatible_existing_dimension() -> None:
-    repository = make_repository(FakeConnection(embedding_type="vector(4)"))
+def test_repository_requires_database_configuration() -> None:
+    settings = make_settings(connection_string=None)
 
-    with pytest.raises(CvVectorSchemaError, match=r"expected vector\(3\)"):
-        repository.setup()
-
-
-def test_repository_normalizes_sqlalchemy_psycopg_connection_url() -> None:
-    connection = FakeConnection()
-    captured = {}
-
-    def connection_factory(connection_string):
-        captured["connection_string"] = connection_string
-        return connection
-
-    repository = CvVectorRepository(
-        make_settings(connection_string="postgresql+psycopg://db/cv"),
-        connection_factory=connection_factory,
-        vector_registrar=lambda current_connection: None,
-    )
-    repository.setup()
-
-    assert captured["connection_string"] == "postgresql://db/cv"
+    with pytest.raises(CvVectorConfigurationError):
+        CvVectorRepository(settings, embeddings=FakeEmbeddings())
 
 
 def test_repository_rejects_wrong_embedding_dimension_before_connecting() -> None:
-    connection = FakeConnection()
-    repository = make_repository(connection)
+    repository, _, _ = make_repository()
 
     with pytest.raises(CvVectorDimensionError):
         repository.replace_active_cv([make_chunk()], [[0.1, 0.2]])
 
-    assert connection.events == []
+    assert repository._vector_store is None
 
 
 def test_repository_writes_new_chunks_before_removing_old_documents() -> None:
-    connection = FakeConnection()
-    repository = make_repository(connection)
+    repository, store, _ = make_repository()
     chunks = [make_chunk(chunk_id="chunk-1"), make_chunk(chunk_id="chunk-2", page_number=2)]
 
     count = repository.replace_active_cv(chunks, [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
 
     assert count == 2
-    assert connection.events == ["insert", "insert", "delete-stale", "delete-old"]
-    assert connection.committed
+    assert [record.id for record in store.session.merged] == ["chunk-1", "chunk-2"]
+    assert [record.document for record in store.session.merged] == [
+        "Text for chunk-1",
+        "Text for chunk-2",
+    ]
+    assert len(store.session.statements) == 1
+    assert store.session.committed
 
 
 def test_repository_rolls_back_and_keeps_old_rows_when_a_write_fails() -> None:
-    connection = FakeConnection(fail_insert_number=2)
-    repository = make_repository(connection)
+    repository, store, _ = make_repository(fail_merge_number=2)
 
-    with pytest.raises(psycopg.OperationalError):
+    with pytest.raises(SQLAlchemyError, match="injected write failure"):
         repository.replace_active_cv(
             [make_chunk(chunk_id="chunk-1"), make_chunk(chunk_id="chunk-2")],
             [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
         )
 
-    assert connection.rolled_back
-    assert connection.events == ["insert", "insert"]
+    assert store.session.rolled_back
+    assert store.session.statements == []
 
 
 CV_PGVECTOR_TEST_CONNECTION_STRING = os.getenv("CV_PGVECTOR_TEST_CONNECTION_STRING")
@@ -183,14 +196,14 @@ CV_PGVECTOR_TEST_CONNECTION_STRING = os.getenv("CV_PGVECTOR_TEST_CONNECTION_STRI
     reason="Set CV_PGVECTOR_TEST_CONNECTION_STRING to run the PGVector integration test",
 )
 def test_pgvector_setup_write_and_active_cv_replacement() -> None:
-    table_name = f"cv_test_{uuid.uuid4().hex}"
+    collection_name = f"cv_test_{uuid.uuid4().hex}"
     settings = Settings(
         _env_file=None,
         pgvector_connection_string=CV_PGVECTOR_TEST_CONNECTION_STRING,
-        pgvector_table_name=table_name,
+        pgvector_collection_name=collection_name,
         pgvector_embedding_dimension=3,
     )
-    repository = CvVectorRepository(settings)
+    repository = CvVectorRepository(settings, embeddings=FakeEmbeddings())
 
     try:
         repository.setup()
@@ -204,16 +217,14 @@ def test_pgvector_setup_write_and_active_cv_replacement() -> None:
             [[0.4, 0.5, 0.6]],
         )
 
-        with psycopg.connect(repository.connection_string) as connection:
-            rows = connection.execute(
-                sql.SQL("SELECT document_id, content, metadata FROM {}")
-                .format(sql.Identifier(table_name))
-            ).fetchall()
+        documents = repository.vector_store.similarity_search_by_vector(
+            embedding=[0.4, 0.5, 0.6],
+            k=10,
+        )
 
-        assert len(rows) == 1
-        assert rows[0][0] == "new-cv"
-        assert rows[0][1] == "Text for new-1"
-        assert rows[0][2]["page_number"] == 2
+        assert len(documents) == 1
+        assert documents[0].page_content == "Text for new-1"
+        assert documents[0].metadata["document_id"] == "new-cv"
+        assert documents[0].metadata["page_number"] == 2
     finally:
-        with psycopg.connect(repository.connection_string) as connection:
-            connection.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(sql.Identifier(table_name)))
+        repository.vector_store.delete_collection()
