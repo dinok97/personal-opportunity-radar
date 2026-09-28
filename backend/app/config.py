@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     embedding_model: str = "jinaai/jina-embeddings-v5-text-nano"
     embedding_model_revision: str = "8a7f00a"
     pgvector_connection_string: str | None = Field(default=None, min_length=1)
-    pgvector_table_name: str = Field(default="cv_chunks", pattern=r"^[a-z_][a-z0-9_]*$")
+    pgvector_collection_name: str = Field(
+        default="cv_chunks", pattern=r"^[a-z_][a-z0-9_]*$"
+    )
     pgvector_embedding_dimension: int = Field(default=768, gt=0)
     backend_cors_origins: str = "http://localhost:3000"
 

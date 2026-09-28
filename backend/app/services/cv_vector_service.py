@@ -22,11 +22,11 @@ class CvVectorService:
         embeddings: EmbeddingClient | None = None,
     ) -> None:
         self.embedding_dimension = settings.pgvector_embedding_dimension
-        self.repository = repository or CvVectorRepository(settings)
         self.embeddings = embeddings or HuggingFaceEmbeddingClient(
             settings.embedding_model,
             settings.embedding_model_revision,
         )
+        self.repository = repository or CvVectorRepository(settings, embeddings=self.embeddings)
 
     def setup(self) -> None:
         self.repository.setup()

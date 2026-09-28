@@ -1,6 +1,8 @@
 from functools import lru_cache
 from typing import Protocol
 
+from langchain_core.embeddings import Embeddings
+
 
 class EmbeddingClient(Protocol):
     def embed_documents(self, texts: list[str]) -> list[list[float]]: ...
@@ -26,9 +28,12 @@ def _load_embedding_model(model_name: str, model_revision: str):
     )
 
 
-class HuggingFaceEmbeddingClient:
+class HuggingFaceEmbeddingClient(Embeddings):
     def __init__(self, model_name: str, model_revision: str) -> None:
         self.model = _load_embedding_model(model_name, model_revision)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return self.model.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.model.embed_query(text)

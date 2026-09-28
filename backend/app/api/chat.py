@@ -2,9 +2,9 @@ import json
 import logging
 from uuid import uuid4
 
-import psycopg
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import get_settings
 from ..models import ChatMessage, ChatRequest, ChatResponse
@@ -160,7 +160,7 @@ async def chat(request: Request) -> ChatResponse:
             CvVectorConfigurationError,
             CvVectorDimensionError,
             CvVectorSchemaError,
-            psycopg.Error,
+            SQLAlchemyError,
         ) as exc:
             logger.exception("CV upload could not be persisted")
             raise HTTPException(

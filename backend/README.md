@@ -21,11 +21,11 @@ OLLAMA_MODEL=qwen3.5-2b
 
 Ollama must be reachable from the backend. If the backend runs in a container, `localhost` points to that container; use an Ollama host address reachable from it instead. Pull the configured Ollama model with `ollama pull <OLLAMA_MODEL>`. If OpenRouter is selected without an API key, the API runs in demo mode with deterministic opportunity data. Errors from a selected live provider return HTTP 502; the backend does not switch providers automatically.
 
-CV storage uses a local Hugging Face embedding model and a dedicated PGVector table. Configure these values in `backend/.env`:
+CV storage uses a local Hugging Face embedding model and a LangChain PGVector collection. Configure these values in `backend/.env`:
 
 ```env
 PGVECTOR_CONNECTION_STRING=postgresql+psycopg://user:password@localhost:5432/opportunity_radar
-PGVECTOR_TABLE_NAME=cv_chunks
+PGVECTOR_COLLECTION_NAME=cv_chunks
 PGVECTOR_EMBEDDING_DIMENSION=768
 EMBEDDING_MODEL=jinaai/jina-embeddings-v5-text-nano
 EMBEDDING_MODEL_REVISION=8a7f00a
@@ -39,7 +39,7 @@ Enable the PGVector extension in the database before the first upload:
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-The backend must be able to reach PostgreSQL and Hugging Face on first use. It creates and validates the configured vector table on upload. Its database role therefore needs permission to create tables in the selected schema. Set `PGVECTOR_EMBEDDING_DIMENSION` to the output dimension of the selected embedding model; a mismatch prevents writes.
+The backend must be able to reach PostgreSQL and Hugging Face on first use. LangChain creates its `langchain_pg_collection` and `langchain_pg_embedding` tables and the configured collection on upload. Its database role therefore needs permission to create the vector extension and tables in the selected schema. `PGVECTOR_COLLECTION_NAME` is a collection name, not a table name. Existing rows in the old custom `cv_chunks` table are not migrated automatically. Set `PGVECTOR_EMBEDDING_DIMENSION` to the output dimension of the selected embedding model; a mismatch prevents writes.
 
 ## CV upload and data handling
 
