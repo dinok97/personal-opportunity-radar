@@ -4,11 +4,14 @@ import { createMockResponse } from "@/lib/mock-data";
 const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
+  const isMultipartRequest = (request.headers.get("content-type") || "").includes(
+    "multipart/form-data"
+  );
+
   try {
-    const contentType = request.headers.get("content-type") || "";
     let backendRequest: RequestInit;
 
-    if (contentType.includes("multipart/form-data")) {
+    if (isMultipartRequest) {
       const formData = await request.formData();
       const forwardedForm = new FormData();
       const prompt = formData.get("prompt");
@@ -33,6 +36,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseBody, { status: backendResponse.status });
   } catch {
+    if (isMultipartRequest) {
+      return NextResponse.json(
+        { detail: "CV storage is unavailable. The upload was not confirmed." },
+        { status: 503 }
+      );
+    }
+
     const body = await request.clone().json().catch(() => ({ prompt: "all" }));
     const fallback = createMockResponse(typeof body?.prompt === "string" ? body.prompt : "all");
 
