@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import sys 
 from pathlib import Path
@@ -13,6 +13,8 @@ class LinkedInJobService(JobSourceService):
 
     def __init__(self) -> None:
         super().__init__()
+
+        self.linkedin_global_domain = "www.linkedin.com"
 
         self.footer_markers = re.compile(
             r"^[ \t]*(?:"
@@ -67,3 +69,11 @@ class LinkedInJobService(JobSourceService):
         canonical: str = f"linkedin.com/jobs/view/{job_id}"
         
         return canonical
+
+    def get_job_extraction_url(self, url: str) -> str:
+        parsed = urlparse(url=url)
+        parsed = parsed._replace(netloc=self.linkedin_global_domain, query="", fragment="")
+
+        return urlunparse(parsed)
+
+        

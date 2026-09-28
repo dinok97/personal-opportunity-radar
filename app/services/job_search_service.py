@@ -24,7 +24,7 @@ def get_job_search_queries() -> List[str]:
 
    # TODO: Get search queries based on user profile (pre-built)
 
-    queries = build_search_queries(["AI Engineer", "ML Engineer"])
+    queries = build_search_queries(["Master Thesis AI"])
     queries = add_site_refs_to_queries(queries, JOBSEARCH_DOMAINS)
 
     return queries
@@ -50,6 +50,7 @@ def process_searched_result(results: List[Dict[Any, Any]]):
             continue
 
         url = normalize_url(item.get("url", ""))
+        url = get_canonical_job_url(url)
         score = item.get("score", 0)
 
         job_source_service = JobSourceFactory.create(url)
@@ -75,6 +76,19 @@ def print_searched_jobs(jobs):
         print(f"Title: {job.title}")
         print(f"URL: {job.url}")
         print(f"Published data: {job.published_datetime}")
+
+
+def get_canonical_job_url(url: str) -> str:
+    job_source_factory = JobSourceFactory()
+    
+    try: 
+        job_source_service = job_source_factory.create(url)
+        canonical_url =  job_source_service.get_job_extraction_url(url)
+
+        return canonical_url
+    except:
+        return url
+
 
 
 def search_jobs_by_queries(websearch_request: WebSearchParams,  

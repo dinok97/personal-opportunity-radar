@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from typing import List, Optional
-from datetime import datetime, timedelta
+from models.job import Job, JobExtraction, JobSearch
 
 sys.path.append(str(Path(__file__).resolve().parent))
 
@@ -45,3 +45,49 @@ def add_site_refs_to_queries(queries: List[str], domains: List[str]) -> List[str
     unique_queries = list(dict.fromkeys(sited_queries))
 
     return unique_queries
+
+def isknown(value):
+    return value if value and value != "Not specified" else None
+
+def build_embedding_text(job: Job) -> str:
+    lines = [
+        f"Title: {job.title}",
+        f"Company: {job.company}",
+        f"Specialization: {job.specialization}" if isknown(job.specialization) else None,
+        f"Employment Type: {job.employment_type}" if isknown(job.employment_type) else None,
+        f"Seniority Level: {job.seniority}" if isknown(job.seniority) else None,
+        f"Work Mode: {job.work_mode}" if isknown(job.work_mode) else None,
+        f"Locations: {job.locations}" if isknown(job.locations) else None,
+        f"Industry Domain: {job.industry_domain}" if isknown(job.industry_domain) else None,
+        f"Required Skills: {job.skills}" if isknown(job.skills) else None,
+        f"Required Education: {job.education}" if isknown(job.education) else None,
+        f"Required Experience: {job.experience}" if isknown(job.experience) else None,
+        f"Summary: {job.executive_summary}" if isknown(job.executive_summary) else None,
+    ]
+
+    return "\n".join(line for line in lines if line)
+
+
+def to_job(extracted: JobExtraction, job_res: JobSearch, summary: str) -> Job:
+    job = Job(
+        title=extracted.title,
+        company=extracted.company,
+        source=extracted.source,
+        external_id=job_res.external_id,
+        url=job_res.url,
+        posted_at=job_res.published_datetime,
+        locations=extracted.locations,
+        specialization=extracted.specialization,
+        work_mode=extracted.work_mode,
+        employment_type=extracted.employment_type,
+        seniority=extracted.seniority,
+        skills=extracted.skills,
+        industry_domain=extracted.industry_domain,
+        education=extracted.education,
+        experience=extracted.experience,
+        executive_summary=summary,
+    )
+
+    job.embedding_text = build_embedding_text(job)
+
+    return job

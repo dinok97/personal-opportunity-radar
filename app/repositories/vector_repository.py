@@ -17,6 +17,7 @@ from models.vector_record import VectorRecord
 from typing import List
 from langchain_postgres import PGVectorStore
 from langchain_postgres.v2.engine import Column
+from langchain_core.documents import Document
 
 
 class VectorRepository(BaseRepository):
@@ -32,6 +33,30 @@ class VectorRepository(BaseRepository):
         self.embedding_service = embedding_service
         self.engine = db.engine
         self._store: PGVectorStore | None = None
+
+    @property
+    def all_metadata_columns(self) -> list[Column]:
+        return [
+            *self.metadata_columns,
+            *AUDIT_COLUMNS
+        ]
+
+
+    @property
+    def store(self) -> PGVectorStore:
+        if self._store is None:
+            self._store = PGVectorStore.create_sync(
+                engine=self.engine,
+                table_name=self.table_name,
+                embedding_service=self.embedding_service.model,
+                id_column=self.id_column_name,
+                content_column=self.content_column,
+                embedding_column="embedding",
+                metadata_columns=[
+                    c.name for c in self.all_metadata_columns
+                ],
+            )
+        return self._store
 
     def setup(self, overwrite_existing: bool = False):
         self._execute(
@@ -65,30 +90,6 @@ class VectorRepository(BaseRepository):
         if existed:
             self._execute(f"DROP TABLE IF EXISTS {self.table_name};")
         return existed
-
-    @property
-    def all_metadata_columns(self) -> list[Column]:
-        return [
-            *self.metadata_columns,
-            *AUDIT_COLUMNS
-        ]
-
-
-    @property
-    def store(self) -> PGVectorStore:
-        if self._store is None:
-            self._store = PGVectorStore.create_sync(
-                engine=self.engine,
-                table_name=self.table_name,
-                embedding_service=self.embedding_service.model,
-                id_column=self.id_column_name,
-                content_column=self.content_column,
-                embedding_column="embedding",
-                metadata_columns=[
-                    c.name for c in self.all_metadata_columns
-                ],
-            )
-        return self._store
 
 
     def upsert(self, items: List[VectorRecord]) -> List[str]:
@@ -163,4 +164,8 @@ class VectorRepository(BaseRepository):
                                    FROM {self.table_name};""")
         
         return [dict(row) for row in rows]
-    
+
+
+    def search_by_query(self, query: str, k: int):
+        results = self.store.similarity_search_with_score(query=query, k=k)
+        return results

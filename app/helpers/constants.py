@@ -29,6 +29,8 @@ EMBEDDING_MODEL="jinaai/jina-embeddings-v5-text-nano"
 EMBEDDING_DIMENSION=768
 EMBEDDING_MODEL_REVISION="8a7f00a"
 
+MAX_RESULTS_RETRIVAL=10
+
 AUDIT_COLUMN_CREATED_AT="created_at"
 AUDIT_COLUMN_UPDATED_AT="updated_at"
 
@@ -42,15 +44,23 @@ AUDIT_COLUMNS_SQL = f"""created_at TIMESTAMPTZ NOT NULL,
 
 
 JOBS_TABLE="jobs"
-JOBS_TABLE_ID="jobs_id"
-JOBS_TABLE_SOURCE="source"
-JOBS_TABLE_URL="url"
-JOBS_TABLE_TITLE="title"
-JOBS_TABLE_COMPANY="company"
-JOBS_TABLE_LOCATION="location"
-JOBS_TABLE_EXEC_SUMMARY="executive_summary"
-JOBS_TABLE_POSTED_AT="posted_at"
-JOBS_TABLE_ROLE_TYPE="role_type"
+JOBS_TABLE_ID = "jobs_id"
+JOBS_TABLE_SOURCE = "source"
+JOBS_TABLE_URL = "url"
+JOBS_TABLE_POSTED_AT = "posted_at"
+JOBS_TABLE_TITLE = "title"
+JOBS_TABLE_COMPANY = "company"
+JOBS_TABLE_LOCATIONS = "locations"
+JOBS_TABLE_SPECIALIZATION = "specialization"
+JOBS_TABLE_EMPLOYMENT_TYPE = "employment_type"
+JOBS_TABLE_SENIORITY = "seniority"
+JOBS_TABLE_WORK_MODE = "work_mode"
+JOBS_TABLE_INDUSTRY_DOMAIN = "industry_domain"
+JOBS_TABLE_SKILLS = "skills"
+JOBS_TABLE_EDUCATION = "education"
+JOBS_TABLE_EXPERIENCE = "experience"
+JOBS_TABLE_EXEC_SUMMARY = "executive_summary"
+JOBS_TABLE_EMBEDDING_TEXT = "embedding_text"
 JOBS_TABLE_IS_ACTIVE="is_active"
 JOBS_TABLE_IS_DELETED="is_deleted"
 

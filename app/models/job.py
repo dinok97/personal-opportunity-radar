@@ -4,32 +4,59 @@ from typing import List, Optional, Literal
 from datetime import datetime
 
 class Job(BaseModel):
+    title: str
+    company: str
     source: str 
     external_id: str
-    url: str = Field(description="URL of job to uniquely identify the job")
-    title: str = Field(description="Job title")
-    company: Optional[str] = None
-    location: Optional[str] = None  
+    url: str 
     posted_at: Optional[datetime] = None
-    executive_summary: str
-    role_type: Literal["Thesis", "Internship", "Part-time", "Full-time"] = "Full-time"
+    locations: str
+    specialization: str
+    work_mode: Literal["Remote", "Hybrid", "Onsite"]
+    employment_type: Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
+    seniority: Literal["Student", "Entry", "Mid", "Senior", "Lead", "Not specified"]
+    skills: str
+    industry_domain: str | None
+    education: str | None 
+    experience: str | None 
+
+    executive_summary: str = ""
+    embedding_text: str = ""
+
     is_active: bool = True
     is_deleted: bool = False
 
 
 class JobExtraction(BaseModel):
     title: str
-    company: Optional[str] = Field(description="Hiring company, e.g. 'Ericsson'. Always present in the posting.")
-    location: Optional[str] = Field(description="City, Country, e.g. 'Stockholm, Sweden'. 'Not specified' only if truly absent.")
-    role_type: Literal["Thesis", "Internship", "Part-time", "Full-time"] = "Full-time"
-    is_accepting_applications: bool = True
-    executive_summary: str = Field(
-        description=(
-            "3-5 sentences in English only. Start with the main responsibilities, then key "
-            "required skills and education, then dates or duration if given. Do NOT mention "
-            "title, company, location, role type or work model. If something is not in the "
-            "posting, leave it out; never write 'not specified' or 'not stated'."
-        )
+    company: str
+    source: str
+    specialization: str = Field(
+        description='Up to 3 broad kinds of work, comma-separated, e.g. "Machine Learning, Computer Vision".'
+    )
+    locations: str = Field(
+        description='Each as "City, Country", separated by "; ", e.g. "Stockholm, Sweden; Kraków, Poland". Empty string if missing.'
+    )
+    work_mode: Literal["Remote", "Hybrid", "Onsite"]
+    employment_type: Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
+    seniority: Literal["Student", "Entry", "Mid", "Senior", "Lead", "Not specified"]
+    skills: str = Field(
+        description="Up to 10 core skills/tools, exact terms from the ad."
+    )
+    responsibilities: str = Field(
+        description="1 sentence: what the person will do."
+    )
+    industry_domain: str | None =  Field(
+        default=None,
+        description='Up to 2 industries the employer serves, e.g. "Telecommunications", "Healthcare". None if unclear.'
+    )
+    education: str | None  = Field(
+        default=None,
+        description='Accepted degrees, comma-separated, e.g. "Master\'s in Computer Science, Master\'s in Data Science".'
+    )
+    experience: str | None = Field(
+        default=None,
+        description='One short phrase, e.g. "5+ years in backend development".'
     )
 
 

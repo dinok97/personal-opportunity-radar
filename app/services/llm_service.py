@@ -11,7 +11,7 @@ from helpers.constants import JOBEVALUATOR_MODEL
 
 load_dotenv()
 
-def get_llm(model = JOBEVALUATOR_MODEL, 
+def get_llm(llm = JOBEVALUATOR_MODEL, 
             max_tokens = 2000, 
             temperature = 0, 
             reasoning_effort = "none"):
@@ -19,7 +19,7 @@ def get_llm(model = JOBEVALUATOR_MODEL,
     # TODO: Use locally loaded quantized model
     model = ChatGroq(
         api_key=os.getenv('GROQ_API_KEY'),
-        model=model,
+        model=llm,
         temperature=temperature,
         max_tokens=max_tokens,
         reasoning_effort=reasoning_effort

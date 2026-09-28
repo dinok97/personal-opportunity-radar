@@ -18,3 +18,7 @@ class JobSourceService(ABC):
     @abstractmethod
     def get_canonical_id(self, url: str) -> str:
         pass
+
+    @abstractmethod
+    def get_job_extraction_url(self, url: str) -> str:
+        pass

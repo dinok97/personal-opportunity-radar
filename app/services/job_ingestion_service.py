@@ -77,7 +77,7 @@ def run_ingestion_pipeline():
         print(f"""Search params:\nstart_date - {request.start_date},\nend_date - {request.end_date},\ntime_range - {request.time_range}""")
 
         try:
-            print(f"Searching.....")
+            print(f"Searching.....{request}")
             job_search_resp: JobSearchResponse = search_jobs_by_queries(request)
             total_found = len(job_search_resp.jobs)
             print(f"Found {total_found} jobs")
