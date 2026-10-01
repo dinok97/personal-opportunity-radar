@@ -45,7 +45,7 @@ The backend must be able to reach PostgreSQL and Hugging Face on first use. Lang
 
 `POST /api/chat` accepts an optional PDF in a multipart request, with a maximum size of 10 MiB. Text is extracted, split into page-aware chunks, embedded, and stored in PGVector. A successful response includes `cv_uploaded: true` and a `document_id`; the frontend treats a missing confirmation or a failed request as an upload failure. Malformed, encrypted, empty, or textless PDFs return HTTP 422, unsupported file types return HTTP 415, and unavailable storage or embeddings return HTTP 503.
 
-Each successful upload replaces the previous active CV. The new chunks are written before old chunks are removed in the same database transaction, so a failed write preserves the prior CV. The original PDF file is not retained; extracted text chunks, filename, and page metadata are stored. The stored CV is not yet used to augment chat or retrieve RAG context.
+Each successful upload replaces the previous active CV. The new chunks are written before old chunks are removed in the same database transaction, so a failed write preserves the prior CV. The original PDF file is not retained; extracted text chunks, filename, and page metadata are stored. The stored CV is not currently used to augment chat or retrieve RAG context.
 
 This backend currently has no authentication or per-user data isolation. Every upload to the configured database replaces the same active CV, so this setup is single-user only and must not be exposed as a multi-user service. CV text and embeddings are sensitive personal data; restrict access to the database and its backups accordingly.
 
@@ -59,8 +59,9 @@ Endpoints:
 
 - `GET /health`
 - `POST /api/chat`
+- `GET /api/user`
 
-The chat endpoint accepts JSON requests with `prompt` and `messages`, or multipart requests with those fields plus an optional PDF. PDF uploads are extracted and stored in PGVector before the response confirms success.
+The chat endpoint accepts JSON requests with `prompt` and `messages`, or multipart requests with those fields plus an optional PDF. PDF uploads are extracted and stored in PGVector before the response confirms success. `GET /api/user` reads all chunks from the active CV, asks the configured LLM provider to extract a profile, and validates the exact response fields `name`, `role`, `email`, `location`, `availability`, `topSkills`, `interests`, and `profileSummary`. Facts not present in the CV are returned as empty strings or arrays. Extraction runs on every request; each validated result is stored in the collection metadata and supplied as profile context to subsequent chat requests. Uploading a new CV invalidates that stored profile. The endpoint returns HTTP 404 if no CV is stored, HTTP 503 if storage or the provider is unavailable, and HTTP 502 if the provider returns an invalid profile.
 
 ## Frontend connection
 

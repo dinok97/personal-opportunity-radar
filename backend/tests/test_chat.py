@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app.config import Settings, get_settings
 from backend.app.main import app
-from backend.app.models import ChatMessage
+from backend.app.models import ChatMessage, UserProfile
 from backend.app.ollama import OllamaClient, OllamaError
 from backend.app.openrouter import OpenRouterClient
 from backend.app.repositories.cv_vector_repository import CvVectorConfigurationError
@@ -112,6 +112,36 @@ def test_openrouter_chat_uses_selected_provider(monkeypatch) -> None:
     assert response.json()["source"] == "openrouter"
 
 
+def test_chat_adds_cached_user_profile_to_job_context(monkeypatch) -> None:
+    captured = {}
+
+    class FakeCvVectorRepository:
+        def __init__(self, settings):
+            pass
+
+        def get_cached_user_profile(self):
+            return UserProfile(name="Alicia Morgan", topSkills=["Python", "NLP"])
+
+    async def complete(self, messages, job_context):
+        captured["context"] = job_context
+        return "Profile-aware answer"
+
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("PGVECTOR_CONNECTION_STRING", "postgresql://db/cv")
+    monkeypatch.setattr(
+        "backend.app.api.chat.CvVectorRepository",
+        FakeCvVectorRepository,
+    )
+    monkeypatch.setattr(OllamaClient, "complete", complete)
+
+    response = client.post("/api/chat", json={"prompt": "Find matching roles"})
+
+    assert response.status_code == 200
+    assert '"name": "Alicia Morgan"' in captured["context"]
+    assert "Python" in captured["context"]
+    assert "Job opportunities:" in captured["context"]
+
+
 def test_ollama_chat_works_without_openrouter_key(monkeypatch) -> None:
     async def complete(self, messages, job_context):
         return "Ollama response"
@@ -168,6 +198,69 @@ def test_ollama_completion_uses_openai_compatible_endpoint(monkeypatch) -> None:
     assert captured["payload"]["messages"][-1] == {"role": "user", "content": "Find jobs"}
     assert "Relevant job context" in captured["payload"]["messages"][0]["content"]
     assert "Authorization" not in captured["headers"]
+
+
+def test_ollama_profile_extraction_requests_json(monkeypatch) -> None:
+    captured = {}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, endpoint, headers, json):
+            captured.update(endpoint=endpoint, headers=headers, payload=json)
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": '{"name":"Alicia"}'}}]},
+            )
+
+    monkeypatch.setattr("backend.app.ollama.httpx.AsyncClient", FakeAsyncClient)
+    settings = Settings(_env_file=None, ollama_base_url="http://ollama:11434/v1")
+
+    result = asyncio.run(OllamaClient(settings).extract_profile("CV contents"))
+
+    assert result == '{"name":"Alicia"}'
+    assert captured["endpoint"] == "http://ollama:11434/v1/chat/completions"
+    assert captured["payload"]["response_format"] == {"type": "json_object"}
+    assert "CV contents" in captured["payload"]["messages"][1]["content"]
+
+
+def test_openrouter_profile_extraction_requests_json(monkeypatch) -> None:
+    captured = {}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def post(self, endpoint, headers, json):
+            captured.update(endpoint=endpoint, headers=headers, payload=json)
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": '{"name":"Alicia"}'}}]},
+            )
+
+    monkeypatch.setattr("backend.app.openrouter.httpx.AsyncClient", FakeAsyncClient)
+    settings = Settings(_env_file=None, openrouter_api_key="test-key")
+
+    result = asyncio.run(OpenRouterClient(settings).extract_profile("CV contents"))
+
+    assert result == '{"name":"Alicia"}'
+    assert captured["endpoint"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert captured["payload"]["response_format"] == {"type": "json_object"}
+    assert "CV contents" in captured["payload"]["messages"][1]["content"]
 
 
 def test_ollama_failure_returns_bad_gateway(monkeypatch) -> None:

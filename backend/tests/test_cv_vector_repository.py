@@ -44,9 +44,21 @@ class FakeTransaction:
         return False
 
 
+class FakeQuery:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def filter(self, condition):
+        return self
+
+    def all(self):
+        return self.rows
+
+
 class FakeSession:
-    def __init__(self, fail_merge_number=None):
+    def __init__(self, fail_merge_number=None, rows=None):
         self.fail_merge_number = fail_merge_number
+        self.rows = list(rows or [])
         self.merged = []
         self.statements = []
         self.committed = False
@@ -72,13 +84,16 @@ class FakeSession:
     def execute(self, statement):
         self.statements.append(statement)
 
+    def query(self, model):
+        return FakeQuery(self.rows)
+
 
 class FakeVectorStore:
-    def __init__(self, *, fail_merge_number=None):
+    def __init__(self, *, fail_merge_number=None, rows=None):
         self.EmbeddingStore = FakeEmbeddingStore
-        self.session = FakeSession(fail_merge_number)
+        self.session = FakeSession(fail_merge_number, rows)
         self.session_maker = lambda: self.session
-        self.collection = SimpleNamespace(uuid="collection-id")
+        self.collection = SimpleNamespace(uuid="collection-id", cmetadata=None)
 
     def get_collection(self, session):
         return self.collection
@@ -148,6 +163,74 @@ def test_repository_requires_database_configuration() -> None:
 
     with pytest.raises(CvVectorConfigurationError):
         CvVectorRepository(settings, embeddings=FakeEmbeddings())
+
+
+def test_repository_reads_all_active_chunks_in_page_order() -> None:
+    rows = [
+        FakeEmbeddingStore(
+            id="chunk-2",
+            collection_id="collection-id",
+            embedding=[0.1, 0.2, 0.3],
+            document="Second page",
+            cmetadata={"page_number": 2, "chunk_index": 0},
+        ),
+        FakeEmbeddingStore(
+            id="chunk-1b",
+            collection_id="collection-id",
+            embedding=[0.1, 0.2, 0.3],
+            document="Second chunk on first page",
+            cmetadata={"page_number": 1, "chunk_index": 1},
+        ),
+        FakeEmbeddingStore(
+            id="chunk-1a",
+            collection_id="collection-id",
+            embedding=[0.1, 0.2, 0.3],
+            document="First chunk on first page",
+            cmetadata={"page_number": 1, "chunk_index": 0},
+        ),
+    ]
+    store = FakeVectorStore(rows=rows)
+    repository, _, _ = make_repository(store=store)
+
+    chunks = repository.get_active_cv_chunks()
+
+    assert [chunk.id for chunk in chunks] == ["chunk-1a", "chunk-1b", "chunk-2"]
+    assert [chunk.content for chunk in chunks] == [
+        "First chunk on first page",
+        "Second chunk on first page",
+        "Second page",
+    ]
+    assert chunks[0].metadata == {"page_number": 1, "chunk_index": 0}
+
+
+def test_repository_returns_no_chunks_when_collection_is_missing() -> None:
+    repository, store, _ = make_repository()
+    store.collection = None
+
+    assert repository.get_active_cv_chunks() == []
+
+
+def test_repository_persists_and_reads_user_profile() -> None:
+    from backend.app.models import UserProfile
+
+    repository, store, _ = make_repository()
+    profile = UserProfile(name="Alicia Morgan", topSkills=["Python"])
+
+    repository.save_user_profile(profile)
+
+    assert repository.get_cached_user_profile() == profile
+    assert store.collection.cmetadata["user_profile"] == profile.model_dump(mode="json")
+
+
+def test_repository_invalidates_profile_when_replacing_active_cv() -> None:
+    from backend.app.models import UserProfile
+
+    repository, store, _ = make_repository()
+    repository.save_user_profile(UserProfile(name="Previous CV"))
+
+    repository.replace_active_cv([make_chunk()], [[0.1, 0.2, 0.3]])
+
+    assert repository.get_cached_user_profile() is None
 
 
 def test_repository_rejects_wrong_embedding_dimension_before_connecting() -> None:
