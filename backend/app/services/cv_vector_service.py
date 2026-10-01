@@ -52,3 +52,10 @@ class CvVectorService:
                 )
 
         return self.repository.replace_active_cv(chunks, vectors)
+
+
+    def search(self, query: str, *, k: int = 5):
+        if not query.strip():
+            raise ValueError("Query must not be empty")
+
+        return self.repository.search(query, k=k)

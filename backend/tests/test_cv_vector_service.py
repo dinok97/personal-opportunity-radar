@@ -36,6 +36,16 @@ class FakeRepository:
         self.replacement = (chunks, embeddings)
         return len(chunks)
 
+    def search(self, query: str, *, k: int = 5):
+        return [
+            SimpleNamespace(
+                page_content="NLP and machine learning experience",
+                metadata={
+                    "document_id": "cv-1",
+                    "page_number": 2,
+                },
+            )
+        ][:k]
 
 class FakeEmbeddings:
     def __init__(self, vectors=None, error: Exception | None = None):
@@ -167,3 +177,34 @@ def test_cv_vector_service_uses_configured_hugging_face_model(monkeypatch) -> No
         },
         "texts": ["CV text"],
     }
+
+
+def test_cv_vector_service_search_returns_relevant_cv_chunks() -> None:
+    repository = FakeRepository()
+    service = CvVectorService(
+        make_settings(),
+        repository=repository,
+        embeddings=FakeEmbeddings(),
+    )
+
+    documents = service.search(
+        "What experience do I have in NLP?",
+        k=1,
+    )
+
+    assert len(documents) == 1
+    assert documents[0].page_content == "NLP and machine learning experience"
+    assert documents[0].metadata["document_id"] == "cv-1"
+    assert documents[0].metadata["page_number"] == 2
+
+
+def test_cv_vector_service_search_rejects_empty_query() -> None:
+    repository = FakeRepository()
+    service = CvVectorService(
+        make_settings(),
+        repository=repository,
+        embeddings=FakeEmbeddings(),
+    )
+
+    with pytest.raises(ValueError, match="Query must not be empty"):
+        service.search("   ")

@@ -83,6 +83,17 @@ class FakeVectorStore:
     def get_collection(self, session):
         return self.collection
 
+    def similarity_search(self, query, *, k):
+        return [
+            SimpleNamespace(
+                page_content="NLP and machine learning experience",
+                metadata={
+                    "document_id": "new-cv",
+                    "page_number": 2,
+                    "chunk_index": 0,
+                },
+            )
+        ][:k]
 
 class FakeEmbeddings:
     def embed_documents(self, texts):
@@ -186,6 +197,29 @@ def test_repository_rolls_back_and_keeps_old_rows_when_a_write_fails() -> None:
 
     assert store.session.rolled_back
     assert store.session.statements == []
+
+
+
+def test_repository_search_returns_relevant_cv_chunks() -> None:
+    repository, _, _ = make_repository()
+
+    documents = repository.search(
+        "What experience do I have in NLP?",
+        k=1,
+    )
+
+    assert len(documents) == 1
+    assert documents[0].page_content == "NLP and machine learning experience"
+    assert documents[0].metadata["document_id"] == "new-cv"
+    assert documents[0].metadata["page_number"] == 2
+
+
+
+def test_repository_search_rejects_empty_query() -> None:
+    repository, _, _ = make_repository()
+
+    with pytest.raises(ValueError, match="Query must not be empty"):
+        repository.search("   ")
 
 
 CV_PGVECTOR_TEST_CONNECTION_STRING = os.getenv("CV_PGVECTOR_TEST_CONNECTION_STRING")

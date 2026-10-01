@@ -108,3 +108,19 @@ class CvVectorRepository:
                 )
 
         return len(chunks)
+
+
+# 
+    def search(
+        self,
+        query: str,
+        *,
+        k: int = 5,
+    ):
+        if not query.strip():
+            raise ValueError("Query must not be empty")
+
+        return self.vector_store.similarity_search(
+            query,
+            k=k,
+        )

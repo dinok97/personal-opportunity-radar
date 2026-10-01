@@ -1,6 +1,22 @@
 .venv/
 .env
+
 __pycache__/
 .pytest_cache/
 *.py[cod]
 *.egg-info/
+
+# macOS
+.DS_Store
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log

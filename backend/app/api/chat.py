@@ -33,6 +33,12 @@ def _job_context(jobs: list) -> str:
     )
 
 
+def _cv_context(documents: list) -> str:
+    return "\n".join(
+        f"- {document.page_content}"
+        for document in documents
+    )
+
 def _parse_messages(raw_messages: str | None) -> list[ChatMessage]:
     if not raw_messages:
         return []
@@ -125,12 +131,58 @@ async def chat(request: Request) -> ChatResponse:
         )
 
     settings = get_settings()
+
+    cv_documents = []
+    
+
+    if cv_chunks:
+        cv_service = CvVectorService(settings)
+        try:
+            cv_service.replace_active_cv(cv_chunks)
+        except (
+            CvEmbeddingError,
+            CvVectorConfigurationError,
+            CvVectorDimensionError,
+            CvVectorSchemaError,
+            SQLAlchemyError,
+        ) as exc:
+            logger.exception("CV storage could not be completed")
+            raise HTTPException(
+                status_code=503,
+                detail="CV storage is unavailable",
+            ) from exc
+
+    if clean_prompt and (cv_chunks or settings.pgvector_connection_string):
+        try:
+            cv_service = CvVectorService(settings)
+            cv_documents = cv_service.search(clean_prompt, k=5)
+        except (
+            CvEmbeddingError,
+            CvVectorConfigurationError,
+            CvVectorDimensionError,
+            CvVectorSchemaError,
+            SQLAlchemyError,
+        ) as exc:
+            logger.exception("CV retrieval could not be completed")
+            raise HTTPException(
+                status_code=503,
+                detail="CV retrieval is unavailable",
+            ) from exc
+            
     source = "demo"
     if settings.llm_provider == "ollama":
         try:
+            # message = await OllamaClient(settings).complete(
+            #     current_messages,
+            #     _job_context(jobs),
+            # )
             message = await OllamaClient(settings).complete(
                 current_messages,
-                _job_context(jobs),
+                f"""CV CONTEXT:
+                {_cv_context(cv_documents)}
+
+                OPPORTUNITY CONTEXT:
+                {_job_context(jobs)}""",
             )
             source = "ollama"
         except OllamaError as exc:
@@ -138,9 +190,18 @@ async def chat(request: Request) -> ChatResponse:
             raise HTTPException(status_code=502, detail="The AI provider is unavailable") from exc
     elif settings.openrouter_api_key:
         try:
+            # message = await OpenRouterClient(settings).complete(
+            #     current_messages,
+            #     _job_context(jobs),
+            # )
             message = await OpenRouterClient(settings).complete(
                 current_messages,
-                _job_context(jobs),
+                f"""CV CONTEXT:
+                {_cv_context(cv_documents)}
+
+                OPPORTUNITY CONTEXT:
+                {_job_context(jobs)}
+                """,
             )
             source = "openrouter"
         except OpenRouterError as exc:
@@ -152,21 +213,21 @@ async def chat(request: Request) -> ChatResponse:
             "Add OPENROUTER_API_KEY to enable live responses."
         )
 
-    if cv_chunks:
-        try:
-            CvVectorService(settings).replace_active_cv(cv_chunks)
-        except (
-            CvEmbeddingError,
-            CvVectorConfigurationError,
-            CvVectorDimensionError,
-            CvVectorSchemaError,
-            SQLAlchemyError,
-        ) as exc:
-            logger.exception("CV upload could not be persisted")
-            raise HTTPException(
-                status_code=503,
-                detail="CV storage is unavailable",
-            ) from exc
+    # if cv_chunks:
+    #     try:
+    #         CvVectorService(settings).replace_active_cv(cv_chunks)
+    #     except (
+    #         CvEmbeddingError,
+    #         CvVectorConfigurationError,
+    #         CvVectorDimensionError,
+    #         CvVectorSchemaError,
+    #         SQLAlchemyError,
+    #     ) as exc:
+    #         logger.exception("CV upload could not be persisted")
+    #         raise HTTPException(
+    #             status_code=503,
+    #             detail="CV storage is unavailable",
+    #         ) from exc
 
     if file_name:
         message = f"I received {file_name}. {message}"

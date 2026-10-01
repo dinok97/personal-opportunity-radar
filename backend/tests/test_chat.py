@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -65,6 +66,25 @@ def mock_cv_ingestion(
             if storage_error:
                 raise storage_error
             return len(chunks)
+
+        # def search(self, query: str, *, k: int = 5):
+        #     captured["search_query"] = query
+        #     captured["search_k"] = k
+        #     return []        
+
+        def search(self, query: str, *, k: int = 5):
+            captured["search_query"] = query
+            captured["search_k"] = k
+
+            return [
+                SimpleNamespace(
+                    page_content="I have experience in NLP and machine learning.",
+                    metadata={
+                        "document_id": "test-cv",
+                        "page_number": 1,
+                    },
+                )
+            ][:k]
 
     monkeypatch.setattr("backend.app.api.chat.extract_pdf_pages", extract_pdf)
     monkeypatch.setattr("backend.app.api.chat.chunk_cv_pages", chunk_pages)
@@ -264,6 +284,99 @@ def test_pdf_upload_is_extracted_persisted_and_returns_document_id(monkeypatch) 
     assert captured["pdf_content"] == b"pdf bytes"
     assert captured["chunks"][0].metadata["document_id"] == payload["document_id"]
 
+
+def test_chat_includes_retrieved_cv_context(monkeypatch) -> None:
+    captured = mock_cv_ingestion(monkeypatch)
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    llm_context = {}
+
+    async def fake_complete(self, messages, job_context):
+        llm_context["job_context"] = job_context
+        return "Mock answer"
+
+    monkeypatch.setattr(
+        "backend.app.api.chat.OpenRouterClient.complete",
+        fake_complete,
+    )
+
+    response = client.post(
+        "/api/chat",
+        data={"prompt": "What experience do I have in NLP?"},
+        files={"file": ("resume.pdf", b"pdf bytes", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+
+    assert "CV CONTEXT:" in llm_context["job_context"]
+    assert (
+        "I have experience in NLP and machine learning."
+        in llm_context["job_context"]
+    )
+
+    assert captured["search_query"] == "What experience do I have in NLP?"
+    assert captured["search_k"] == 5
+
+
+def test_chat_retrieves_existing_cv_without_new_upload(monkeypatch) -> None:
+    captured = {}
+
+    class FakeCvVectorService:
+        def __init__(self, settings):
+            captured["settings"] = settings
+
+        def search(self, query: str, *, k: int = 5):
+            captured["search_query"] = query
+            captured["search_k"] = k
+
+            return [
+                SimpleNamespace(
+                    page_content="I have experience in NLP and machine learning.",
+                    metadata={
+                        "document_id": "existing-cv",
+                        "page_number": 1,
+                    },
+                )
+            ][:k]
+
+    monkeypatch.setattr(
+        "backend.app.api.chat.CvVectorService",
+        FakeCvVectorService,
+    )
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv(
+        "PGVECTOR_CONNECTION_STRING",
+        "postgresql://test-user:test-password@localhost:5432/test-db",
+    )
+
+    llm_context = {}
+
+    async def fake_complete(self, messages, job_context):
+        llm_context["job_context"] = job_context
+        return "Mock answer"
+
+    monkeypatch.setattr(
+        "backend.app.api.chat.OpenRouterClient.complete",
+        fake_complete,
+    )
+
+    response = client.post(
+        "/api/chat",
+        json={"prompt": "What experience do I have in NLP?"},
+    )
+
+    assert response.status_code == 200
+
+    assert "CV CONTEXT:" in llm_context["job_context"]
+    assert (
+        "I have experience in NLP and machine learning."
+        in llm_context["job_context"]
+    )
+
+    assert captured["search_query"] == "What experience do I have in NLP?"
+    assert captured["search_k"] == 5
 
 def test_unreadable_pdf_returns_unprocessable_entity(monkeypatch) -> None:
     captured = mock_cv_ingestion(
