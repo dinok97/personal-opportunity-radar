@@ -55,20 +55,21 @@ def build_embedding_text(job: Job) -> str:
         f"Company: {job.company}",
         f"Specialization: {job.specialization}" if isknown(job.specialization) else None,
         f"Employment Type: {job.employment_type}" if isknown(job.employment_type) else None,
-        f"Seniority Level: {job.seniority}" if isknown(job.seniority) else None,
-        f"Work Mode: {job.work_mode}" if isknown(job.work_mode) else None,
         f"Locations: {job.locations}" if isknown(job.locations) else None,
-        f"Industry Domain: {job.industry_domain}" if isknown(job.industry_domain) else None,
         f"Required Skills: {job.skills}" if isknown(job.skills) else None,
-        f"Required Education: {job.education}" if isknown(job.education) else None,
-        f"Required Experience: {job.experience}" if isknown(job.experience) else None,
         f"Summary: {job.executive_summary}" if isknown(job.executive_summary) else None,
     ]
 
     return "\n".join(line for line in lines if line)
 
 
-def to_job(extracted: JobExtraction, job_res: JobSearch, summary: str) -> Job:
+def to_job(extracted: JobExtraction, job_res: JobSearch) -> Job:
+
+    parts = [extracted.role_overview, extracted.work_overview, extracted.daily_tasks,
+             extracted.requirements, extracted.practical_details]
+    
+    executive_summary = " ".join(p.strip() for p in parts if p)
+
     job = Job(
         title=extracted.title,
         company=extracted.company,
@@ -78,14 +79,9 @@ def to_job(extracted: JobExtraction, job_res: JobSearch, summary: str) -> Job:
         posted_at=job_res.published_datetime,
         locations=extracted.locations,
         specialization=extracted.specialization,
-        work_mode=extracted.work_mode,
         employment_type=extracted.employment_type,
-        seniority=extracted.seniority,
         skills=extracted.skills,
-        industry_domain=extracted.industry_domain,
-        education=extracted.education,
-        experience=extracted.experience,
-        executive_summary=summary,
+        executive_summary=executive_summary
     )
 
     job.embedding_text = build_embedding_text(job)

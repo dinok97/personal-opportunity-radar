@@ -3,6 +3,8 @@ from email.utils import parsedate_to_datetime
 from typing import List, Optional, Literal
 from datetime import datetime
 
+JOB_EMPLOYMENT_TYPES=Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
+
 class Job(BaseModel):
     title: str
     company: str
@@ -12,13 +14,8 @@ class Job(BaseModel):
     posted_at: Optional[datetime] = None
     locations: str
     specialization: str
-    work_mode: Literal["Remote", "Hybrid", "Onsite"]
-    employment_type: Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
-    seniority: Literal["Student", "Entry", "Mid", "Senior", "Lead", "Not specified"]
+    employment_type: JOB_EMPLOYMENT_TYPES
     skills: str
-    industry_domain: str | None
-    education: str | None 
-    experience: str | None 
 
     executive_summary: str = ""
     embedding_text: str = ""
@@ -37,28 +34,18 @@ class JobExtraction(BaseModel):
     locations: str = Field(
         description='Each as "City, Country", separated by "; ", e.g. "Stockholm, Sweden; Kraków, Poland". Empty string if missing.'
     )
-    work_mode: Literal["Remote", "Hybrid", "Onsite"]
-    employment_type: Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
-    seniority: Literal["Student", "Entry", "Mid", "Senior", "Lead", "Not specified"]
+    employment_type: JOB_EMPLOYMENT_TYPES
     skills: str = Field(
         description="Up to 10 core skills/tools, exact terms from the ad."
     )
-    responsibilities: str = Field(
-        description="1 sentence: what the person will do."
-    )
-    industry_domain: str | None =  Field(
+    role_overview: str = Field(description="One sentence: the role at a glance.")
+    work_overview: str = Field(description="One sentence: the kind of work, industry and project.")
+    daily_tasks: str = Field(description="One sentence: what the person will do day to day.")
+    requirements: str = Field(description="One sentence: skills, degrees, experience, languages.")
+    practical_details: str | None = Field(
         default=None,
-        description='Up to 2 industries the employer serves, e.g. "Telecommunications", "Healthcare". None if unclear.'
+        description="One sentence: salary, deadline, start date or duration. None if not stated.",
     )
-    education: str | None  = Field(
-        default=None,
-        description='Accepted degrees, comma-separated, e.g. "Master\'s in Computer Science, Master\'s in Data Science".'
-    )
-    experience: str | None = Field(
-        default=None,
-        description='One short phrase, e.g. "5+ years in backend development".'
-    )
-
 
 class JobSearch(BaseModel):
     external_id: str = Field(description="URL of job to uniquely identify the job")
