@@ -77,10 +77,10 @@ def to_job(extracted: JobExtraction, job_res: JobSearch) -> Job:
         external_id=job_res.external_id,
         url=job_res.url,
         posted_at=job_res.published_datetime,
-        locations=extracted.locations,
-        specialization=extracted.specialization,
+        locations=", ".join(extracted.locations),
+        specialization=", ".join(extracted.specialization) if extracted.specialization else "",
         employment_type=extracted.employment_type,
-        skills=extracted.skills,
+        skills=", ".join(extracted.skills) if extracted.skills else "",
         executive_summary=executive_summary
     )
 
