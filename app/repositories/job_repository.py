@@ -22,12 +22,7 @@ from helpers.constants import (
     JOBS_TABLE_LOCATIONS,
     JOBS_TABLE_SPECIALIZATION,
     JOBS_TABLE_EMPLOYMENT_TYPE,
-    JOBS_TABLE_SENIORITY,
-    JOBS_TABLE_WORK_MODE,
-    JOBS_TABLE_INDUSTRY_DOMAIN,
     JOBS_TABLE_SKILLS,
-    JOBS_TABLE_EDUCATION,
-    JOBS_TABLE_EXPERIENCE,
     JOBS_TABLE_EXEC_SUMMARY,
     JOBS_TABLE_EMBEDDING_TEXT,
     JOBS_TABLE_IS_ACTIVE,
@@ -50,12 +45,7 @@ class JobRepository(VectorRepository):
         Column(name=JOBS_TABLE_POSTED_AT, data_type="TIMESTAMPTZ"),
         Column(name=JOBS_TABLE_SPECIALIZATION, data_type="TEXT"),
         Column(name=JOBS_TABLE_EMPLOYMENT_TYPE, data_type="TEXT"),
-        Column(name=JOBS_TABLE_SENIORITY, data_type="TEXT"),
-        Column(name=JOBS_TABLE_WORK_MODE, data_type="TEXT"),
-        Column(name=JOBS_TABLE_INDUSTRY_DOMAIN, data_type="TEXT"),
         Column(name=JOBS_TABLE_SKILLS, data_type="TEXT"),
-        Column(name=JOBS_TABLE_EDUCATION, data_type="TEXT"),
-        Column(name=JOBS_TABLE_EXPERIENCE, data_type="TEXT"),
         Column(name=JOBS_TABLE_EXEC_SUMMARY, data_type="TEXT"),
         Column(name=JOBS_TABLE_IS_ACTIVE, data_type="BOOLEAN"),
         Column(name=JOBS_TABLE_IS_DELETED, data_type="BOOLEAN"),
@@ -95,12 +85,7 @@ class JobRepository(VectorRepository):
                     JOBS_TABLE_LOCATIONS: job.locations,
                     JOBS_TABLE_SPECIALIZATION: job.specialization,
                     JOBS_TABLE_EMPLOYMENT_TYPE: job.employment_type,
-                    JOBS_TABLE_SENIORITY: job.seniority,
-                    JOBS_TABLE_WORK_MODE: job.work_mode,
-                    JOBS_TABLE_INDUSTRY_DOMAIN: job.industry_domain,
                     JOBS_TABLE_SKILLS: job.skills,
-                    JOBS_TABLE_EDUCATION: job.education,
-                    JOBS_TABLE_EXPERIENCE: job.experience,
                     JOBS_TABLE_EXEC_SUMMARY: job.executive_summary,
                     JOBS_TABLE_IS_ACTIVE: job.is_active,
                     JOBS_TABLE_IS_DELETED: job.is_deleted,
@@ -134,20 +119,20 @@ class JobRepository(VectorRepository):
                 executive_summary = row[JOBS_TABLE_EXEC_SUMMARY],
                 employment_type = row[JOBS_TABLE_EMPLOYMENT_TYPE],
                 specialization = row[JOBS_TABLE_SPECIALIZATION],
-                seniority = row [JOBS_TABLE_SENIORITY],
-                work_mode = row[JOBS_TABLE_WORK_MODE],
-                industry_domain = row[JOBS_TABLE_INDUSTRY_DOMAIN], 
                 skills = row[JOBS_TABLE_SKILLS],
-                education = row[JOBS_TABLE_EDUCATION],
-                experience = row[JOBS_TABLE_EXPERIENCE],
                 is_active = row[JOBS_TABLE_IS_ACTIVE],
                 is_deleted = row[JOBS_TABLE_IS_DELETED],
             )
 
         return job or None
 
-
     def get_jobs_by_query(self, query: str, k: int):
-        res = self.search_by_query(query, k)
-
-        return res
+        
+        default_filters = {
+            "$and": [
+                {JOBS_TABLE_IS_ACTIVE: { "$eq": True }},
+                {JOBS_TABLE_IS_DELETED: { "$eq": False }}
+            ]
+        }
+        
+        return self.search_by_query(query, k, default_filters)

@@ -14,7 +14,7 @@ from repositories.database import Database
 from services.embedding_service import EmbeddingService
 from models.vector_record import VectorRecord
 
-from typing import List
+from typing import List, Any
 from langchain_postgres import PGVectorStore
 from langchain_postgres.v2.engine import Column
 from langchain_core.documents import Document
@@ -166,6 +166,5 @@ class VectorRepository(BaseRepository):
         return [dict(row) for row in rows]
 
 
-    def search_by_query(self, query: str, k: int):
-        results = self.store.similarity_search_with_score(query=query, k=k)
-        return results
+    def search_by_query(self, query: str, k: int, filters: dict[str, Any] | None) -> List[tuple[Document, float]]:
+        return self.store.similarity_search_with_score(query=query, k=k, filter=filters)

@@ -3,6 +3,8 @@ from email.utils import parsedate_to_datetime
 from typing import List, Optional, Literal
 from datetime import datetime
 
+JOB_EMPLOYMENT_TYPES=Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
+
 class Job(BaseModel):
     title: str
     company: str
@@ -12,13 +14,8 @@ class Job(BaseModel):
     posted_at: Optional[datetime] = None
     locations: str
     specialization: str
-    work_mode: Literal["Remote", "Hybrid", "Onsite"]
-    employment_type: Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
-    seniority: Literal["Student", "Entry", "Mid", "Senior", "Lead", "Not specified"]
+    employment_type: Optional[JOB_EMPLOYMENT_TYPES] = None
     skills: str
-    industry_domain: str | None
-    education: str | None 
-    experience: str | None 
 
     executive_summary: str = ""
     embedding_text: str = ""
@@ -31,34 +28,40 @@ class JobExtraction(BaseModel):
     title: str
     company: str
     source: str
-    specialization: str = Field(
-        description='Up to 3 broad kinds of work, comma-separated, e.g. "Machine Learning, Computer Vision".'
+    is_closed: bool
+    is_in_accepted_location: bool
+    locations: List[str] = Field(
+        description='Each location as "City, Country", one per item, e.g. "Stockholm, Sweden". Empty list if missing.'
     )
-    locations: str = Field(
-        description='Each as "City, Country", separated by "; ", e.g. "Stockholm, Sweden; Kraków, Poland". Empty string if missing.'
-    )
-    work_mode: Literal["Remote", "Hybrid", "Onsite"]
-    employment_type: Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
-    seniority: Literal["Student", "Entry", "Mid", "Senior", "Lead", "Not specified"]
-    skills: str = Field(
-        description="Up to 10 core skills/tools, exact terms from the ad."
-    )
-    responsibilities: str = Field(
-        description="1 sentence: what the person will do."
-    )
-    industry_domain: str | None =  Field(
+    employment_type: JOB_EMPLOYMENT_TYPES | None = None
+    specialization: List[str] | None = Field(
         default=None,
-        description='Up to 2 industries the employer serves, e.g. "Telecommunications", "Healthcare". None if unclear.'
+        description="Up to 3 broad kinds of work, one per item, most relevant first.",
     )
-    education: str | None  = Field(
+    skills: List[str] | None = Field(
         default=None,
-        description='Accepted degrees, comma-separated, e.g. "Master\'s in Computer Science, Master\'s in Data Science".'
+        description="Up to 10 core skills/tools, one per item, exact terms from the ad, most relevant first.",
     )
-    experience: str | None = Field(
-        default=None,
-        description='One short phrase, e.g. "5+ years in backend development".'
+    role_overview: str | None = Field(
+        default=None, 
+        description="One sentence: the role at a glance."
     )
-
+    work_overview: str | None = Field(
+        default=None, 
+        description="One sentence: the kind of work, industry and project."
+    )
+    daily_tasks: str | None = Field(
+        default=None, 
+        description="One sentence starting with 'You will'."
+    )
+    requirements: str | None = Field(
+        default=None, 
+        description="One sentence: skills, degrees, experience, languages."
+    )
+    practical_details: str | None = Field(
+        default=None, 
+        description="One sentence: salary, deadline, start date or duration."
+    )
 
 class JobSearch(BaseModel):
     external_id: str = Field(description="URL of job to uniquely identify the job")
