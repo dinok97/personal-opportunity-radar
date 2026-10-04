@@ -16,10 +16,13 @@ The main goal was to enable the backend to:
 6.  Pass the retrieved CV context to the LLM together with the existing
     job-opportunity context.
 7.  Keep the existing job retrieval flow unchanged.
+8.  Improve CV retrieval quality by reranking retrieved candidate chunks
+    with a CrossEncoder before passing the final CV context to the LLM.
 
 The existing job/opportunity retrieval functionality was not newly
 implemented in this work; the changes here mainly add CV semantic
-retrieval and connect it to the existing chat flow.
+retrieval, CrossEncoder reranking, and integration with the existing
+chat flow.
 
 ------------------------------------------------------------------------
 
@@ -64,19 +67,57 @@ This is the main repository-level CV retrieval functionality.
 
 ### What was added
 
-Added a service-level `search()` method:
+The CV vector service now handles both semantic candidate retrieval and
+CrossEncoder reranking.
+
+The search pipeline is:
+
+``` text
+User query
+    ↓
+PGVector semantic search
+    ↓
+Top 20 candidate CV chunks
+    ↓
+CrossEncoder reranking
+    ↓
+Top 5 CV chunks
+```
+
+The current reranker is:
+
+``` text
+cross-encoder/ms-marco-MiniLM-L6-v2
+```
+
+The service supports:
 
 ``` python
-def search(self, query: str, *, k: int = 5):
-    if not query.strip():
-        raise ValueError("Query must not be empty")
-    return self.repository.search(query, k=k)
+def search(
+    self,
+    query: str,
+    *,
+    k: int = 5,
+    candidate_k: int = 20,
+):
+    ...
 ```
 
 ### Purpose
 
-The service layer exposes CV semantic retrieval to the API layer while
-keeping the repository interaction behind the service.
+-   Uses PGVector semantic similarity search to retrieve a candidate set.
+-   Uses `candidate_k=20` by default so the reranker has more candidates
+    to compare.
+-   Uses a CrossEncoder to score the query against the retrieved CV
+    chunks.
+-   Returns the best `k=5` reranked CV chunks to the chat layer.
+-   Keeps the embedding model responsible for candidate retrieval and the
+    CrossEncoder responsible for reranking.
+-   Keeps the LLM responsible for final answer generation rather than
+    using the LLM as the reranker.
+
+The reranker is loaded lazily and cached so the model is not repeatedly
+initialized for every search request.
 
 Flow:
 
@@ -85,9 +126,13 @@ Chat/API
    ↓
 CvVectorService.search()
    ↓
-CvVectorRepository.search()
+CvVectorRepository.search(query, candidate_k=20)
    ↓
 PGVector similarity search
+   ↓
+CrossEncoder reranking
+   ↓
+Top 5 CV chunks
 ```
 
 ------------------------------------------------------------------------
@@ -126,6 +171,10 @@ Conceptually:
 User question
      ↓
 CV semantic search
+     ↓
+Candidate CV chunks
+     ↓
+CrossEncoder reranking
      ↓
 Top 5 CV chunks
      ↓
@@ -212,8 +261,10 @@ Added service-level tests for `CvVectorService.search()`.
 The tests verify:
 
 -   A valid query is passed to the repository.
--   The requested `k` value is forwarded.
+-   The requested retrieval parameters are handled correctly.
 -   Empty queries are rejected.
+-   Retrieved candidates are passed to the CrossEncoder reranker.
+-   The reranked documents are returned to the caller.
 
 ------------------------------------------------------------------------
 
@@ -353,6 +404,49 @@ The LLM model is controlled through the local `.env` configuration.
 
 ------------------------------------------------------------------------
 
+# Retrieval vs Reranking vs LLM
+
+These components have different responsibilities in the current RAG
+pipeline.
+
+### Embedding model
+
+The embedding model converts CV chunks and the user query into vectors.
+PGVector uses those vectors for semantic candidate retrieval.
+
+### CrossEncoder reranker
+
+The CrossEncoder receives the user query and the retrieved candidate
+CV chunks together and scores how relevant each chunk is to the query.
+
+Current configuration:
+
+``` text
+Candidate retrieval: top 20
+Reranking: CrossEncoder
+Final CV context: top 5
+Model: cross-encoder/ms-marco-MiniLM-L6-v2
+```
+
+This means the system does not simply take the first five vector-search
+results. It first retrieves a broader candidate set and then reorders
+those candidates before sending the final context to the LLM.
+
+### LLM
+
+The LLM receives the final reranked CV context together with the existing
+opportunity context and generates the natural-language answer.
+
+So the responsibilities are:
+
+``` text
+Embedding model → candidate retrieval
+CrossEncoder    → candidate reranking
+LLM             → final answer generation
+```
+
+------------------------------------------------------------------------
+
 # Database / PGVector Setup
 
 The CV retrieval uses the configured PostgreSQL/PGVector connection.
@@ -411,7 +505,7 @@ The backend test suite was run after the retrieval implementation.
 Result:
 
 ``` text
-62 passed, 1 skipped
+63 passed, 1 skipped, 1 warning
 ```
 
 There was also a pytest-asyncio deprecation warning, but it did not
@@ -447,9 +541,11 @@ For team sharing, use `.env.example` with placeholder values.
 -   CV semantic search at service level.
 -   CV retrieval integration in `/api/chat`.
 -   Retrieved CV context for the LLM.
+-   CrossEncoder-based CV candidate reranking.
+-   Top-20 candidate retrieval followed by top-5 reranking.
 -   Support for retrieval from an already stored CV.
 -   Repository retrieval tests.
--   Service retrieval tests.
+-   Service retrieval and reranking tests.
 -   Chat integration tests.
 -   Ollama debugging/error visibility needed during local integration
     testing.
@@ -473,6 +569,7 @@ Before merging this branch:
 -   [ ] Verify Ollama/local LLM configuration.
 -   [ ] Test `/api/chat` with a real CV.
 -   [ ] Confirm CV chunks are retrieved for a relevant query.
+-   [ ] Confirm CrossEncoder reranking is applied before LLM generation.
 -   [ ] Review the final `git diff`.
 -   [ ] Make sure `.env` and secrets are not committed.
 -   [ ] Merge `retrieval/cv-retrieval` into the team's target branch

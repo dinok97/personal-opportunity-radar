@@ -47,6 +47,26 @@ class FakeRepository:
             )
         ][:k]
 
+
+
+class FakeReranker:
+    def __init__(self, ranked_indices=None):
+        self.ranked_indices = ranked_indices or []
+        self.calls = []
+
+    def rank(self, query, documents, top_k):
+        self.calls.append((query, documents, top_k))
+
+        return [
+            {
+                "corpus_id": index,
+                "score": 1.0 - position * 0.1,
+            }
+            for position, index in enumerate(self.ranked_indices[:top_k])
+        ]
+
+
+
 class FakeEmbeddings:
     def __init__(self, vectors=None, error: Exception | None = None):
         self.vectors = [[0.1, 0.2, 0.3]] if vectors is None else vectors
@@ -208,3 +228,32 @@ def test_cv_vector_service_search_rejects_empty_query() -> None:
 
     with pytest.raises(ValueError, match="Query must not be empty"):
         service.search("   ")
+
+
+
+def test_cv_vector_service_search_reranks_candidates() -> None:
+    repository = FakeRepository()
+    reranker = FakeReranker(ranked_indices=[0])
+    service = CvVectorService(
+        make_settings(),
+        repository=repository,
+        embeddings=FakeEmbeddings(),
+        reranker=reranker,
+    )
+
+    documents = service.search(
+        "What experience do I have in NLP?",
+        k=1,
+        candidate_k=20,
+    )
+
+    assert len(documents) == 1
+    assert documents[0].page_content == "NLP and machine learning experience"
+
+    assert reranker.calls == [
+        (
+            "What experience do I have in NLP?",
+            ["NLP and machine learning experience"],
+            1,
+        )
+    ]
