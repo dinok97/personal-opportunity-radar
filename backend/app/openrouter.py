@@ -9,24 +9,26 @@ class OpenRouterError(RuntimeError):
 
 
 class OpenRouterClient:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, system_prompt: str | None = None) -> None:
         self.settings = settings
+        self.system_prompt = system_prompt
 
     async def complete(self, messages: list[ChatMessage], job_context: str) -> str:
         if not self.settings.openrouter_api_key:
             raise OpenRouterError("OPENROUTER_API_KEY is not configured")
 
+        system_content = self.system_prompt or (
+            "You are the Personal Opportunity Radar career assistant. "
+            "Give concise, practical, honest career guidance. Use the supplied "
+            "opportunity context when answering, and do not invent job facts. "
+            "Explain why a role may fit the user's profile.\n\n"
+            f"User skills: Python, Machine Learning, NLP, SQL, LLMs, Research.\n"
+            f"Opportunity context:\n{job_context}"
+        )
         provider_messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are the Personal Opportunity Radar career assistant. "
-                    "Give concise, practical, honest career guidance. Use the supplied "
-                    "opportunity context when answering, and do not invent job facts. "
-                    "Explain why a role may fit the user's profile.\n\n"
-                    f"User skills: Python, Machine Learning, NLP, SQL, LLMs, Research.\n"
-                    f"Opportunity context:\n{job_context}"
-                ),
+                "content": system_content,
             },
             *[message.model_dump() for message in messages],
         ]

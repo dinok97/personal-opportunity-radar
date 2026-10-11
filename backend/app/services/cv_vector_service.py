@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 from ..config import Settings
+from ..models import UserProfile
 from ..repositories.cv_vector_repository import (
     CvVectorDimensionError,
     CvVectorRepository,
@@ -42,7 +43,12 @@ class CvVectorService:
     def setup(self) -> None:
         self.repository.setup()
 
-    def replace_active_cv(self, chunks: Sequence[CvChunk]) -> int:
+    def replace_active_cv(
+        self,
+        chunks: Sequence[CvChunk],
+        *,
+        profile: UserProfile | None = None,
+    ) -> int:
         if not chunks:
             raise ValueError("At least one CV chunk is required")
 
@@ -62,7 +68,7 @@ class CvVectorService:
                     f"dimension {self.embedding_dimension}"
                 )
 
-        return self.repository.replace_active_cv(chunks, vectors)
+        return self.repository.replace_active_cv(chunks, vectors, profile=profile)
 
 
     def search(

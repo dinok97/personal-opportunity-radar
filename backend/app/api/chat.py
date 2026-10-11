@@ -17,6 +17,11 @@ from ..repositories.cv_vector_repository import (
     CvVectorSchemaError,
 )
 from ..services.cv_chunking import CvChunk, chunk_cv_pages
+from ..services.cv_extraction_service import (
+    CV_EXTRACTION_SYSTEM_PROMPT,
+    CvExtractionError,
+    CvExtractionService,
+)
 from ..services.cv_pdf_extraction import CvPdfExtractionError, extract_pdf_pages
 from ..services.cv_vector_service import CvEmbeddingError, CvVectorService
 
@@ -102,6 +107,7 @@ async def chat(request: Request) -> ChatResponse:
     file_name = pdf_upload[0] if pdf_upload else None
     cv_chunks: list[CvChunk] = []
     document_id: str | None = None
+    user_profile = None
     if pdf_upload:
         file_name, pdf_content = pdf_upload
         try:
@@ -132,13 +138,50 @@ async def chat(request: Request) -> ChatResponse:
 
     settings = get_settings()
 
+    if pdf_upload:
+        if settings.llm_provider == "ollama":
+            extraction_client = OllamaClient(settings, system_prompt=CV_EXTRACTION_SYSTEM_PROMPT)
+        elif settings.openrouter_api_key:
+            extraction_client = OpenRouterClient(
+                settings,
+                system_prompt=CV_EXTRACTION_SYSTEM_PROMPT,
+            )
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail="A configured AI provider is required to extract a CV profile",
+            )
+
+        cv_text = "\n\n".join(page.text for page in pages)
+        try:
+            extraction_result = await CvExtractionService(extraction_client).extract_profile(
+                cv_text
+            )
+        except CvExtractionError as exc:
+            logger.warning("CV profile extraction failed: %s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail="The AI provider could not extract a valid CV profile",
+            ) from exc
+        if not extraction_result.is_cv:
+            raise HTTPException(
+                status_code=422,
+                detail=f"The uploaded document is not a CV: {extraction_result.rejection_reason}",
+            )
+        if extraction_result.user_profile is None:
+            raise HTTPException(
+                status_code=502,
+                detail="The AI provider did not return a CV profile",
+            )
+        user_profile = extraction_result.user_profile
+
     cv_documents = []
     
 
     if cv_chunks:
         cv_service = CvVectorService(settings)
         try:
-            cv_service.replace_active_cv(cv_chunks)
+            cv_service.replace_active_cv(cv_chunks, profile=user_profile)
         except (
             CvEmbeddingError,
             CvVectorConfigurationError,
@@ -239,4 +282,5 @@ async def chat(request: Request) -> ChatResponse:
         file_name=file_name,
         cv_uploaded=bool(cv_chunks),
         document_id=document_id if cv_chunks else None,
+        user_profile=user_profile,
     )

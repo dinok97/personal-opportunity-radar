@@ -5,6 +5,8 @@ from langchain_postgres import PGVector
 from sqlalchemy import delete
 
 from ..config import Settings
+from ..models import UserProfile
+from .cv_profile_repository import CvProfileRepository
 from ..services.cv_chunking import CvChunk
 
 
@@ -27,6 +29,7 @@ class CvVectorRepository:
         *,
         embeddings: Any,
         vector_store_factory: Callable[..., PGVector] = PGVector,
+        profile_repository: CvProfileRepository | None = None,
     ) -> None:
         if not settings.pgvector_connection_string:
             raise CvVectorConfigurationError("PGVECTOR_CONNECTION_STRING is not configured")
@@ -39,6 +42,7 @@ class CvVectorRepository:
         self.embeddings = embeddings
         self._vector_store_factory = vector_store_factory
         self._vector_store: PGVector | None = None
+        self.profile_repository = profile_repository or CvProfileRepository()
 
     @property
     def vector_store(self) -> PGVector:
@@ -58,6 +62,7 @@ class CvVectorRepository:
         self,
         chunks: Sequence[CvChunk],
         embeddings: Sequence[Sequence[float]],
+        profile: UserProfile | None = None,
     ) -> int:
         if not chunks:
             raise ValueError("At least one CV chunk is required")
@@ -84,6 +89,12 @@ class CvVectorRepository:
         chunk_ids = [chunk.id for chunk in chunks]
         with vector_store.session_maker() as session:
             with session.begin():
+                if profile is not None:
+                    self.profile_repository.replace_active_profile(
+                        session,
+                        document_id,
+                        profile,
+                    )
                 collection = vector_store.get_collection(session)
                 if collection is None:
                     raise CvVectorSchemaError(
