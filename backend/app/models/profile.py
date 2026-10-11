@@ -1,44 +1,22 @@
-from typing import Literal, List, Optional
+from typing import List, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
-from .helpers.constants import MAX_TARGET_ROLES, MAX_TECHNICAL_SKILLS
+from ..helpers.constants import MAX_TARGET_ROLES, MAX_TECHNICAL_SKILLS
 
-
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant", "system"]
-    content: str = Field(min_length=1, max_length=20_000)
-
-
-class ChatRequest(BaseModel):
-    prompt: str = Field(default="", max_length=20_000)
-    messages: list[ChatMessage] = Field(default_factory=list, max_length=50)
-
-
-class JobMatch(BaseModel):
-    id: str
-    title: str
-    company: str
-    location: str
-    salary: str
-    type: str
-    matchScore: int
-    description: str
-    tags: list[str]
-    reasons: list[str]
-    missingSkills: list[str]
-    source: str
-
-
-EmploymentType = Literal["Full-time", "Part-time", "Internship", "Thesis", "Contract"]
 
 class Term(BaseModel):
     name: str = Field(
         description="Full canonical field name in title case, e.g. 'Machine Learning'. "
-                    "Never include the abbreviation here.")
+        "Never include the abbreviation here."
+    )
     abbreviation: Optional[str] = Field(
-        description="Standard abbreviation used in job postings, e.g. 'ML' for Machine "
-                    "Learning, 'NLP', 'LLMs', 'AI'. Use null only if the field has no "
-                    "standard abbreviation, e.g. 'Data Engineering'.")   # no default = required
+        description=(
+            "Standard abbreviation used in job postings, e.g. 'ML' for Machine "
+            "Learning, 'NLP', 'LLMs', 'AI'. Use null only if the field has no "
+            "standard abbreviation, e.g. 'Data Engineering'."
+        )
+    )
 
 
 class UserProfile(BaseModel):
@@ -56,7 +34,7 @@ class UserProfile(BaseModel):
 
     target_roles: List[Term] = Field(
         min_length=1,
-        max_length=MAX_TARGET_ROLES
+        max_length=MAX_TARGET_ROLES,
     )
 
     technical_skills: List[str] = Field(
@@ -65,7 +43,7 @@ class UserProfile(BaseModel):
         description=(
             f"One concrete technical skill per item, each once, at most "
             f"{MAX_TECHNICAL_SKILLS}, most important first. "
-                    "Canonical names, e.g. 'PyTorch'.",
+            "Canonical names, e.g. 'PyTorch'."
         ),
     )
 
@@ -89,13 +67,3 @@ class CvExtractionResult(BaseModel):
                 "Non-CV results require a rejection_reason and a null user_profile"
             )
         return self
-
-
-class ChatResponse(BaseModel):
-    message: str
-    jobs: list[JobMatch] = Field(default_factory=list)
-    source: Literal["openrouter", "ollama", "demo"]
-    file_name: str | None = None
-    cv_uploaded: bool = False
-    document_id: str | None = None
-    user_profile: UserProfile | None = None

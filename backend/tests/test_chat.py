@@ -15,7 +15,7 @@ from backend.app.openrouter import OpenRouterClient
 from backend.app.repositories.cv_vector_repository import CvVectorConfigurationError
 from backend.app.services.cv_chunking import CvChunk
 from backend.app.services.cv_extraction_service import CvExtractionProviderError
-from backend.app.services.cv_pdf_extraction import CvPdfMalformedError, ExtractedPdfPage
+from backend.app.services.pdf_extraction import CvPdfMalformedError, ExtractedPdfPage
 from backend.app.services.cv_vector_service import CvEmbeddingError
 
 

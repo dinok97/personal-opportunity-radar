@@ -22,7 +22,7 @@ from ..services.cv_extraction_service import (
     CvExtractionError,
     CvExtractionService,
 )
-from ..services.cv_pdf_extraction import CvPdfExtractionError, extract_pdf_pages
+from ..services.pdf_extraction import CvPdfExtractionError, extract_pdf_pages
 from ..services.cv_vector_service import CvEmbeddingError, CvVectorService
 
 logger = logging.getLogger(__name__)
@@ -274,6 +274,8 @@ async def chat(request: Request) -> ChatResponse:
 
     if file_name:
         message = f"I received {file_name}. {message}"
+    
+    print("profile", user_profile)
 
     return ChatResponse(
         message=message,
