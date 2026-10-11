@@ -2,6 +2,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from .jobs import JobMatch
+from .profile import UserProfile
+
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
@@ -13,21 +16,6 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list, max_length=50)
 
 
-class JobMatch(BaseModel):
-    id: str
-    title: str
-    company: str
-    location: str
-    salary: str
-    type: str
-    matchScore: int
-    description: str
-    tags: list[str]
-    reasons: list[str]
-    missingSkills: list[str]
-    source: str
-
-
 class ChatResponse(BaseModel):
     message: str
     jobs: list[JobMatch] = Field(default_factory=list)
@@ -35,3 +23,4 @@ class ChatResponse(BaseModel):
     file_name: str | None = None
     cv_uploaded: bool = False
     document_id: str | None = None
+    user_profile: UserProfile | None = None

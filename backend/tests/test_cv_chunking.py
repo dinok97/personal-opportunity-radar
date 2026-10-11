@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from backend.app.services.cv_chunking import CvChunk, chunk_cv_pages
-from backend.app.services.cv_pdf_extraction import ExtractedPdfPage
+from backend.app.services.pdf_extraction import ExtractedPdfPage
 
 
 UPLOADED_AT = datetime(2026, 9, 27, 12, 0, tzinfo=timezone.utc)

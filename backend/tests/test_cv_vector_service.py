@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.config import Settings
+from backend.app.models import UserProfile
 from backend.app.repositories.cv_vector_repository import CvVectorDimensionError
 from backend.app.services.cv_chunking import CvChunk
 from backend.app.services.cv_vector_service import CvEmbeddingError, CvVectorService
@@ -32,8 +33,8 @@ class FakeRepository:
     def setup(self) -> None:
         self.setup_calls += 1
 
-    def replace_active_cv(self, chunks, embeddings) -> int:
-        self.replacement = (chunks, embeddings)
+    def replace_active_cv(self, chunks, embeddings, *, profile=None) -> int:
+        self.replacement = (chunks, embeddings, profile)
         return len(chunks)
 
     def search(self, query: str, *, k: int = 5):
@@ -100,7 +101,26 @@ def test_cv_vector_service_embeds_then_replaces_active_cv() -> None:
 
     assert result == 2
     assert embeddings.texts == ["First text", "Second text"]
-    assert repository.replacement == (chunks, embeddings.vectors)
+    assert repository.replacement == (chunks, embeddings.vectors, None)
+
+
+def test_cv_vector_service_passes_profile_to_repository() -> None:
+    repository = FakeRepository()
+    profile = UserProfile(
+        full_name=None,
+        professional_field=None,
+        target_roles=[{"name": "Research Engineer", "abbreviation": None}],
+        technical_skills=["Python"],
+    )
+    service = CvVectorService(
+        make_settings(),
+        repository=repository,
+        embeddings=FakeEmbeddings(),
+    )
+
+    service.replace_active_cv([make_chunk()], profile=profile)
+
+    assert repository.replacement[2] == profile
 
 
 def test_cv_vector_service_validates_dimension_before_repository_write() -> None:

@@ -9,12 +9,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app.config import Settings, get_settings
 from backend.app.main import app
-from backend.app.models import ChatMessage
+from backend.app.models import ChatMessage, CvExtractionResult, UserProfile
 from backend.app.ollama import OllamaClient, OllamaError
 from backend.app.openrouter import OpenRouterClient
 from backend.app.repositories.cv_vector_repository import CvVectorConfigurationError
 from backend.app.services.cv_chunking import CvChunk
-from backend.app.services.cv_pdf_extraction import CvPdfMalformedError, ExtractedPdfPage
+from backend.app.services.cv_extraction_service import CvExtractionProviderError
+from backend.app.services.pdf_extraction import CvPdfMalformedError, ExtractedPdfPage
 from backend.app.services.cv_vector_service import CvEmbeddingError
 
 
@@ -32,6 +33,8 @@ def mock_cv_ingestion(
     monkeypatch,
     *,
     extraction_error=None,
+    profile_extraction_error=None,
+    is_cv=True,
     storage_error=None,
     empty_chunks=False,
 ):
@@ -61,8 +64,9 @@ def mock_cv_ingestion(
         def __init__(self, settings):
             captured["settings"] = settings
 
-        def replace_active_cv(self, chunks):
+        def replace_active_cv(self, chunks, *, profile=None):
             captured["chunks"] = chunks
+            captured["profile"] = profile
             if storage_error:
                 raise storage_error
             return len(chunks)
@@ -86,11 +90,42 @@ def mock_cv_ingestion(
                 )
             ][:k]
 
+    class FakeCvExtractionService:
+        def __init__(self, client):
+            captured["extraction_client"] = client
+
+        async def extract_profile(self, cv_text):
+            captured["cv_text"] = cv_text
+            if profile_extraction_error:
+                raise profile_extraction_error
+            user_profile = UserProfile(
+                full_name="Ada Example",
+                professional_field="Software Engineering",
+                target_roles=[
+                    {"name": "Machine Learning Engineer", "abbreviation": None}
+                ],
+                technical_skills=["Python"],
+            )
+            return CvExtractionResult(
+                is_cv=is_cv,
+                rejection_reason=None if is_cv else "job posting",
+                user_profile=user_profile if is_cv else None,
+            )
+
     monkeypatch.setattr("backend.app.api.chat.extract_pdf_pages", extract_pdf)
     monkeypatch.setattr("backend.app.api.chat.chunk_cv_pages", chunk_pages)
     monkeypatch.setattr("backend.app.api.chat.CvVectorService", FakeCvVectorService)
+    monkeypatch.setattr(
+        "backend.app.api.chat.CvExtractionService",
+        FakeCvExtractionService,
+    )
     monkeypatch.setenv("LLM_PROVIDER", "openrouter")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    async def fake_complete(self, messages, job_context):
+        return "Mock chat response"
+
+    monkeypatch.setattr(OpenRouterClient, "complete", fake_complete)
     return captured
 
 
@@ -280,9 +315,42 @@ def test_pdf_upload_is_extracted_persisted_and_returns_document_id(monkeypatch) 
     assert payload["file_name"] == "resume.pdf"
     assert payload["cv_uploaded"] is True
     assert payload["document_id"] == captured["document_id"]
+    assert payload["user_profile"]["full_name"] == "Ada Example"
     assert payload["message"].startswith("I received resume.pdf.")
     assert captured["pdf_content"] == b"pdf bytes"
+    assert captured["cv_text"] == "Extracted CV text"
+    assert captured["profile"].full_name == "Ada Example"
     assert captured["chunks"][0].metadata["document_id"] == payload["document_id"]
+
+
+def test_profile_extraction_failure_does_not_replace_active_cv(monkeypatch) -> None:
+    captured = mock_cv_ingestion(
+        monkeypatch,
+        profile_extraction_error=CvExtractionProviderError("provider unavailable"),
+    )
+
+    response = client.post(
+        "/api/chat",
+        data={"prompt": "Review this CV"},
+        files={"file": ("resume.pdf", b"pdf bytes", "application/pdf")},
+    )
+
+    assert response.status_code == 502
+    assert "chunks" not in captured
+
+
+def test_non_cv_upload_is_rejected_before_replacing_active_cv(monkeypatch) -> None:
+    captured = mock_cv_ingestion(monkeypatch, is_cv=False)
+
+    response = client.post(
+        "/api/chat",
+        data={"prompt": "Review this document"},
+        files={"file": ("posting.pdf", b"pdf bytes", "application/pdf")},
+    )
+
+    assert response.status_code == 422
+    assert "job posting" in response.json()["detail"]
+    assert "chunks" not in captured
 
 
 def test_chat_includes_retrieved_cv_context(monkeypatch) -> None:

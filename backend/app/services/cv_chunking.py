@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import NAMESPACE_URL, uuid5
 
-from .cv_pdf_extraction import ExtractedPdfPage
+from .pdf_extraction import ExtractedPdfPage
 
 # section aware chunking for CVs
 # put too much text in a single chunk and the embedding model will lose context

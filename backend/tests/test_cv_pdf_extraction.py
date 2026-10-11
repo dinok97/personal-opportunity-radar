@@ -4,8 +4,8 @@ import pytest
 from pypdf import PdfWriter
 from pypdf.errors import PdfReadError
 
-from backend.app.services import cv_pdf_extraction
-from backend.app.services.cv_pdf_extraction import (
+from backend.app.services import pdf_extraction
+from backend.app.services.pdf_extraction import (
     CvPdfEmptyError,
     CvPdfEncryptedError,
     CvPdfMalformedError,
@@ -68,7 +68,7 @@ def make_text_pdf(page_texts: list[str]) -> bytes:
 
 
 def test_extract_pdf_pages_preserves_page_numbers_and_normalizes_text(monkeypatch) -> None:
-    monkeypatch.setattr(cv_pdf_extraction, "PdfReader", FakeReader)
+    monkeypatch.setattr(pdf_extraction, "PdfReader", FakeReader)
 
     pages = extract_pdf_pages(b"pdf bytes")
 
@@ -93,7 +93,7 @@ def test_extract_pdf_pages_keeps_blank_pages_in_page_sequence(monkeypatch) -> No
             self.is_encrypted = False
             self.pages = [FakePage("Page one"), FakePage(None), FakePage("Page three")]
 
-    monkeypatch.setattr(cv_pdf_extraction, "PdfReader", ReaderWithBlankPage)
+    monkeypatch.setattr(pdf_extraction, "PdfReader", ReaderWithBlankPage)
 
     pages = extract_pdf_pages(b"pdf bytes")
 
@@ -113,7 +113,7 @@ def test_extract_pdf_pages_rejects_pdf_without_pages(monkeypatch) -> None:
             self.is_encrypted = False
             self.pages = []
 
-    monkeypatch.setattr(cv_pdf_extraction, "PdfReader", EmptyReader)
+    monkeypatch.setattr(pdf_extraction, "PdfReader", EmptyReader)
 
     with pytest.raises(CvPdfEmptyError):
         extract_pdf_pages(b"pdf bytes")
@@ -125,7 +125,7 @@ def test_extract_pdf_pages_rejects_encrypted_pdf(monkeypatch) -> None:
             self.is_encrypted = True
             self.pages = []
 
-    monkeypatch.setattr(cv_pdf_extraction, "PdfReader", EncryptedReader)
+    monkeypatch.setattr(pdf_extraction, "PdfReader", EncryptedReader)
 
     with pytest.raises(CvPdfEncryptedError):
         extract_pdf_pages(b"pdf bytes")
@@ -137,7 +137,7 @@ def test_extract_pdf_pages_rejects_pdf_without_extractable_text(monkeypatch) -> 
             self.is_encrypted = False
             self.pages = [FakePage(None), FakePage("  \n ")]
 
-    monkeypatch.setattr(cv_pdf_extraction, "PdfReader", TextlessReader)
+    monkeypatch.setattr(pdf_extraction, "PdfReader", TextlessReader)
 
     with pytest.raises(CvPdfNoTextError):
         extract_pdf_pages(b"pdf bytes")
@@ -147,7 +147,7 @@ def test_extract_pdf_pages_maps_parser_errors_to_malformed(monkeypatch) -> None:
     def fail_to_read(content: BytesIO):
         raise PdfReadError("not a PDF")
 
-    monkeypatch.setattr(cv_pdf_extraction, "PdfReader", fail_to_read)
+    monkeypatch.setattr(pdf_extraction, "PdfReader", fail_to_read)
 
     with pytest.raises(CvPdfMalformedError):
         extract_pdf_pages(b"not a PDF")

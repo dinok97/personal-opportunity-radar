@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from backend.app.config import Settings
+from backend.app.models import UserProfile
 from backend.app.repositories.cv_vector_repository import (
     CvVectorConfigurationError,
     CvVectorDimensionError,
@@ -139,6 +140,15 @@ def make_chunk(document_id="new-cv", chunk_id="chunk-1", page_number=1):
     )
 
 
+def make_profile():
+    return UserProfile(
+        full_name="Ada Example",
+        professional_field="Software Engineering",
+        target_roles=[{"name": "Machine Learning Engineer", "abbreviation": None}],
+        technical_skills=["Python"],
+    )
+
+
 def test_repository_setup_is_idempotent_and_configures_langchain_store() -> None:
     repository, store, captured = make_repository()
 
@@ -184,6 +194,37 @@ def test_repository_writes_new_chunks_before_removing_old_documents() -> None:
     ]
     assert len(store.session.statements) == 1
     assert store.session.committed
+
+
+def test_repository_replaces_profile_in_the_cv_transaction() -> None:
+    repository, store, _ = make_repository()
+
+    repository.replace_active_cv(
+        [make_chunk()],
+        [[0.1, 0.2, 0.3]],
+        profile=make_profile(),
+    )
+
+    assert store.session.committed
+    assert len(store.session.statements) == 4
+    profile_insert = store.session.statements[2]
+    assert profile_insert.table.name == "cv_profiles"
+    assert profile_insert.compile().params["document_id"] == "new-cv"
+    assert profile_insert.compile().params["profile"]["full_name"] == "Ada Example"
+
+
+def test_repository_rolls_back_profile_when_cv_chunk_write_fails() -> None:
+    repository, store, _ = make_repository(fail_merge_number=1)
+
+    with pytest.raises(SQLAlchemyError, match="injected write failure"):
+        repository.replace_active_cv(
+            [make_chunk()],
+            [[0.1, 0.2, 0.3]],
+            profile=make_profile(),
+        )
+
+    assert store.session.rolled_back
+    assert len(store.session.statements) == 3
 
 
 def test_repository_rolls_back_and_keeps_old_rows_when_a_write_fails() -> None:
