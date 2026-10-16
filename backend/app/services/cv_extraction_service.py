@@ -32,6 +32,10 @@ field. Use null only where the field definition explicitly permits it.
 ## User profile fields
 - full_name: copy the candidate's name as written near the top of the CV; use null if
     it is not stated. Do not infer a name from an email address.
+- email: copy the candidate's email address as stated in the CV; use null if it is not
+    stated. Do not infer or construct an email address.
+- location: copy the candidate's location as stated in the CV; use null if it is not
+    stated. Do not infer a location from an employer, school, or phone number.
 - technical_skills: concrete technical skills evidenced in the skills section, work
     experience, or projects. Include methods and technical fields used in job postings,
     such as reinforcement learning or computer vision. Exclude soft skills, spoken

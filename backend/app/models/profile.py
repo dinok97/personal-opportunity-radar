@@ -24,6 +24,16 @@ class UserProfile(BaseModel):
         description="The candidate's name, or null if not stated."
     )
 
+    email: str | None = Field(
+        default=None,
+        description="The candidate's email address, or null if not stated.",
+    )
+
+    location: str | None = Field(
+        default=None,
+        description="The candidate's location as stated in the CV, or null if not stated.",
+    )
+
     professional_field: str | None = Field(
         description=(
             "The discipline of the candidate's most recent employed work experience, "

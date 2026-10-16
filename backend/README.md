@@ -51,6 +51,8 @@ This backend currently has no authentication or per-user data isolation. Every u
 
 ## Run
 
+From the `backend/` directory:
+
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
@@ -59,8 +61,10 @@ Endpoints:
 
 - `GET /health`
 - `POST /api/chat`
+- `GET /api/profile/{document_id}`
 
 The chat endpoint accepts JSON requests with `prompt` and `messages`, or multipart requests with those fields plus an optional PDF. PDF uploads are extracted and stored in PGVector before the response confirms success.
+The profile endpoint returns the extracted active profile for a CV `document_id` returned by the chat endpoint, or HTTP 404 when no profile exists for that document.
 
 ## Frontend connection
 
