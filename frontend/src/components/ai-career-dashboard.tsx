@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { jobMatches, type JobMatch, userProfile } from "@/lib/mock-data";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { jobMatches, type JobMatch } from "@/lib/mock-data";
+
+type UserProfile = {
+  full_name: string | null;
+  email: string | null;
+  location: string | null;
+  professional_field: string | null;
+  target_roles: { name: string; abbreviation: string | null }[];
+  technical_skills: string[];
+};
 
 type ChatMessage = {
   id: string;
@@ -18,7 +27,22 @@ type ChatApiResponse = {
   document_id?: string | null;
 };
 
+const PROFILE_DOCUMENT_KEY = "opportunity-radar-profile-document-id";
+const PROFILE_DOCUMENT_EVENT = "profile-document-updated";
 const defaultJobs = jobMatches.slice(0, 3);
+
+function subscribeToProfileDocument(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(PROFILE_DOCUMENT_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(PROFILE_DOCUMENT_EVENT, onChange);
+  };
+}
+
+function getProfileDocumentId() {
+  return window.localStorage.getItem(PROFILE_DOCUMENT_KEY);
+}
 
 export function AICareerDashboard() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -26,7 +50,7 @@ export function AICareerDashboard() {
       id: "welcome",
       role: "assistant",
       content:
-        "Hi Alicia — I reviewed your profile and can help you find internship and full-time roles that match your ML and LLM background.",
+        "Hi! Upload your CV to build your profile and find relevant opportunities, or ask me about roles you have in mind.",
       jobs: defaultJobs,
     },
   ]);
@@ -36,6 +60,17 @@ export function AICareerDashboard() {
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "profile">("dashboard");
+  const profileDocumentId = useSyncExternalStore(
+    subscribeToProfileDocument,
+    getProfileDocumentId,
+    () => null,
+  );
+  const [profile, setProfile] = useState<{ documentId: string; data: UserProfile } | null>(null);
+  const [profileLoad, setProfileLoad] = useState<{
+    documentId: string;
+    status: "ready" | "error";
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const messageIdRef = useRef(0);
@@ -50,6 +85,46 @@ export function AICareerDashboard() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    if (!profileDocumentId) return;
+
+    let isCurrentRequest = true;
+
+    fetch(`/api/profile/${encodeURIComponent(profileDocumentId)}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 404) {
+          window.localStorage.removeItem(PROFILE_DOCUMENT_KEY);
+          if (isCurrentRequest) {
+            setProfile(null);
+            window.dispatchEvent(new Event(PROFILE_DOCUMENT_EVENT));
+          }
+          return;
+        }
+        if (!response.ok) throw new Error("Profile service is unavailable.");
+        return (await response.json()) as UserProfile;
+      })
+      .then((data) => {
+        if (isCurrentRequest && data) {
+          setProfile({ documentId: profileDocumentId, data });
+          setProfileLoad({ documentId: profileDocumentId, status: "ready" });
+        }
+      })
+      .catch(() => {
+        if (isCurrentRequest) setProfileLoad({ documentId: profileDocumentId, status: "error" });
+      });
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [profileDocumentId]);
+
+  const profileStatus = !profileDocumentId
+    ? "empty"
+    : profileLoad?.documentId === profileDocumentId
+      ? profileLoad.status
+      : "loading";
+  const currentProfile = profile?.documentId === profileDocumentId ? profile.data : null;
 
   const validatePdfFile = (file: File | null) => {
     if (!file) return true;
@@ -133,6 +208,12 @@ export function AICareerDashboard() {
       if (fileToSend && (data.cv_uploaded !== true || !data.document_id)) {
         throw new Error("The backend did not confirm that this CV was stored. Please try again.");
       }
+      if (fileToSend && data.document_id) {
+        window.localStorage.setItem(PROFILE_DOCUMENT_KEY, data.document_id);
+        setProfile(null);
+        setProfileLoad(null);
+        window.dispatchEvent(new Event(PROFILE_DOCUMENT_EVENT));
+      }
 
       const assistantMessage: ChatMessage = {
         id: nextMessageId("assistant"),
@@ -189,19 +270,20 @@ export function AICareerDashboard() {
 
           <nav className="space-y-1.5">
             {[
-              { label: "Dashboard", active: true },
-              { label: "My profile" },
+              { label: "Dashboard", tab: "dashboard" as const },
+              { label: "My profile", tab: "profile" as const },
               { label: "Matches" },
               { label: "Saved jobs" },
             ].map((item) => (
               <button
                 key={item.label}
+                onClick={() => item.tab && setActiveTab(item.tab)}
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
-                  item.active ? "bg-[#f3f4f6] font-medium text-slate-900" : "text-slate-600 hover:bg-slate-50"
+                  item.tab === activeTab ? "bg-[#f3f4f6] font-medium text-slate-900" : "text-slate-600 hover:bg-slate-50"
                 }`}
               >
                 <span>{item.label}</span>
-                {item.active && <span className="rounded-full bg-[#ecfdf5] px-2 py-0.5 text-[10px] text-[#166534]">Live</span>}
+                {item.tab === activeTab && <span className="rounded-full bg-[#ecfdf5] px-2 py-0.5 text-[10px] text-[#166534]">Live</span>}
               </button>
             ))}
           </nav>
@@ -210,15 +292,17 @@ export function AICareerDashboard() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Profile</p>
             <div className="mt-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e5e7eb] text-xs font-semibold text-slate-700">
-                AM
+                {currentProfile?.full_name?.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "CV"}
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-900">{userProfile.name}</p>
-                <p className="text-xs text-slate-500">{userProfile.role}</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {currentProfile?.full_name || "No CV uploaded"}
+                </p>
+                <p className="text-xs text-slate-500">{currentProfile?.professional_field || "No user profile"}</p>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              {userProfile.topSkills.slice(0, 4).map((skill) => (
+              {currentProfile?.technical_skills.slice(0, 4).map((skill) => (
                 <span key={skill} className="rounded-full border border-[#e5e7eb] bg-white px-2 py-1 text-[10px] text-slate-600">
                   {skill}
                 </span>
@@ -231,15 +315,83 @@ export function AICareerDashboard() {
           <header className="flex items-center justify-between border-b border-[#f1f5f9] px-5 py-4 md:px-7">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Career Copilot</p>
-              <h2 className="mt-1 text-lg font-semibold text-slate-900 md:text-xl">AI job discovery</h2>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900 md:text-xl">
+                {activeTab === "profile" ? "My profile" : "AI job discovery"}
+              </h2>
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-[#d1fae5] bg-[#ecfdf5] px-3 py-1.5 text-xs font-medium text-[#166534]">
-              <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-              3 new matches
+            <div className="flex rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-1" role="tablist" aria-label="Dashboard view">
+              {(["dashboard", "profile"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
+                    activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {tab === "dashboard" ? "Discover" : "Profile"}
+                </button>
+              ))}
             </div>
           </header>
 
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
+          <section className={`${activeTab === "profile" ? "flex" : "hidden"} flex-1 overflow-y-auto px-5 py-6 md:px-8 md:py-8`}>
+            <div className="mx-auto w-full max-w-3xl">
+              {profileStatus === "loading" && (
+                <p className="text-sm text-slate-500">Loading your profile...</p>
+              )}
+                  {profileStatus === "empty" && (
+                <div className="border-l-4 border-[#d97706] bg-[#fffbeb] px-5 py-4">
+                  <h3 className="text-base font-semibold text-slate-900">No user profile</h3>
+                  <p className="mt-1 text-sm text-slate-600">Your CV hasn&apos;t been uploaded yet. Upload a CV in the dashboard to build your profile.</p>
+                </div>
+              )}
+              {profileStatus === "error" && (
+                <p role="alert" className="text-sm text-red-700">Your profile couldn&apos;t be loaded. Check that the backend is available, then try again.</p>
+              )}
+              {profileStatus === "ready" && currentProfile && (
+                <div className="space-y-8">
+                  <div className="border-b border-[#e5e7eb] pb-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">CV profile</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-slate-900">{currentProfile.full_name || "Name not listed"}</h3>
+                    <p className="mt-1 text-sm text-slate-600">{currentProfile.professional_field || "Professional field not listed"}</p>
+                  </div>
+                  <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Email</dt>
+                      <dd className="mt-1 break-words text-sm text-slate-900">{currentProfile.email || "Not listed in CV"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Location</dt>
+                      <dd className="mt-1 text-sm text-slate-900">{currentProfile.location || "Not listed in CV"}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <h4 className="text-xs font-medium uppercase tracking-wide text-slate-500">Target roles</h4>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {currentProfile.target_roles.map((role) => (
+                        <span key={role.name} className="rounded-md border border-[#e5e7eb] bg-white px-3 py-1.5 text-sm text-slate-700">
+                          {role.name}{role.abbreviation ? ` (${role.abbreviation})` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-medium uppercase tracking-wide text-slate-500">Technical skills</h4>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {currentProfile.technical_skills.map((skill) => (
+                        <span key={skill} className="rounded-md bg-[#eef2f4] px-3 py-1.5 text-sm text-slate-700">{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <div ref={chatContainerRef} className={`${activeTab === "dashboard" ? "flex" : "hidden"} flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6`}>
             <div className="mx-auto max-w-3xl space-y-5">
               <div className="flex items-center gap-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 <span className="h-px flex-1 bg-[#f1f5f9]" />
@@ -307,7 +459,7 @@ export function AICareerDashboard() {
             </div>
           </div>
 
-          <div className="border-t border-[#f1f5f9] bg-white px-4 py-4 md:px-6">
+          <div className={`${activeTab === "dashboard" ? "" : "hidden"} border-t border-[#f1f5f9] bg-white px-4 py-4 md:px-6`}>
             <div className="mx-auto max-w-3xl">
               <div className="mb-3 flex flex-wrap gap-2">
                 {quickPrompts.map((prompt) => (
@@ -392,7 +544,7 @@ export function AICareerDashboard() {
           </div>
         </main>
 
-        <aside className="hidden w-[320px] shrink-0 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_1px_2px_rgba(17,24,39,0.04)] xl:block">
+        <aside className={`${activeTab === "dashboard" ? "hidden xl:block" : "hidden"} w-[320px] shrink-0 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_1px_2px_rgba(17,24,39,0.04)]`}>
           {selectedJob ? (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Selected role</p>
