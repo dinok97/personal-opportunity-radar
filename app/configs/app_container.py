@@ -31,7 +31,6 @@ class AppContainer:
         self.searchschedule_repository.setup()
 
         self.user_repository = UserRepository(db=self.db, embedding_service=self.embedding_service)
-        self.user_repository.setup()
 
     def close(self):
         self.db.close()

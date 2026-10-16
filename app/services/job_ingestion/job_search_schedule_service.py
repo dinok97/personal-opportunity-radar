@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
 import sys 
@@ -11,7 +13,9 @@ from helpers.utils import format_datetime, get_datetime_local
 from helpers.constants import MAX_LOOKBACK_DAYS, CHUNK_DAYS_DEFAULT
 from configs.app_container import Container
 from models.search_schedule import SearchSchedule
+from helpers.utils import parse_datetime_isoformat
 
+load_dotenv()
 
 def chunk_windows_backward(start: datetime, end: datetime, chunk_days: int):
     windows = []
@@ -27,16 +31,24 @@ def chunk_windows_backward(start: datetime, end: datetime, chunk_days: int):
 
 def get_schedule_timeline(chunk_days = CHUNK_DAYS_DEFAULT, 
                           max_lookback_days=MAX_LOOKBACK_DAYS) -> SearchScheduleRequest:
-
-    last_run = Container.searchschedule_repository.get_last_run_date()
+    
+    search_start_raw = (os.getenv("JOBSEARCH_START_DATE") or "").strip()  
+    search_end_raw = (os.getenv("JOBSEARCH_END_DATE") or "").strip()  
+    
     now = get_datetime_local()
 
-    earliest = now - timedelta(days=max_lookback_days)
+    if not search_start_raw:
+        last_run = Container.searchschedule_repository.get_last_run_date()
+        earliest = now - timedelta(days=max_lookback_days)
 
-    if last_run is None:
-        start = earliest          
+        if last_run is None:
+            start = earliest          
+        else:
+            start = max(earliest, last_run - timedelta(1))
     else:
-        start = max(earliest, last_run - timedelta(1))
+        start = parse_datetime_isoformat(search_start_raw) 
+        if search_end_raw:
+            now = parse_datetime_isoformat(search_end_raw)
 
     windows = chunk_windows_backward(start, now, chunk_days=chunk_days)
     return SearchScheduleRequest(date_windows=windows)

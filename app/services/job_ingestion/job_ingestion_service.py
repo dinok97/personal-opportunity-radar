@@ -27,7 +27,7 @@ def get_user_preferred_roles() -> list[str]:
     user_job_pref: Optional[UserJobPreference] = get_user_job_preference()
 
     if user_job_pref:
-        return [role.strip() for role in user_job_pref.target_roles.split(";")]
+        return user_job_pref.target_roles
 
     print("No user profile found. Please upload your CV to create a profile.")
 
