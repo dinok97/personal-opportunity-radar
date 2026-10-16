@@ -3,24 +3,23 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from repositories.base_repository import BaseRepository
 from helpers.constants import (
     EMBEDDING_DIMENSION, 
     AUDIT_COLUMNS, 
     AUDIT_COLUMN_CREATED_AT, 
     AUDIT_COLUMN_UPDATED_AT)
-from helpers.utils import get_datetime_utc
+from helpers.utils import get_datetime_local
 from repositories.database import Database
-from services.embedding_service import EmbeddingService
-from models.vector_record import VectorRecord
+from services.common.embedding_service import EmbeddingService
+from dto.vector_record import VectorRecord
 
-from typing import List, Any
+from typing import Any
 from langchain_postgres import PGVectorStore
 from langchain_postgres.v2.engine import Column
 from langchain_core.documents import Document
 
 
-class VectorRepository(BaseRepository):
+class VectorRepository():
     table_name: str
     id_column_name: str
     id_column_def: Column
@@ -29,8 +28,8 @@ class VectorRepository(BaseRepository):
 
 
     def __init__(self, db: Database, embedding_service: EmbeddingService):
-        super().__init__(db)
         self.embedding_service = embedding_service
+        self.db = db
         self.engine = db.engine
         self._store: PGVectorStore | None = None
 
@@ -59,7 +58,7 @@ class VectorRepository(BaseRepository):
         return self._store
 
     def setup(self, overwrite_existing: bool = False):
-        self._execute(
+        self.db.execute(
             "CREATE EXTENSION IF NOT EXISTS vector;"
         )
 
@@ -79,7 +78,7 @@ class VectorRepository(BaseRepository):
         print(f"Table '{self.table_name}' ready.")
 
     def _table_exists(self) -> bool:
-            row = self._fetch_one(
+            row = self.db.fetch_one(
                 "SELECT to_regclass(%s) AS table_name;", 
                 (self.table_name,)
             )
@@ -88,11 +87,11 @@ class VectorRepository(BaseRepository):
     def _drop_existing_table(self) -> bool:
         existed = self._table_exists()
         if existed:
-            self._execute(f"DROP TABLE IF EXISTS {self.table_name};")
+            self.db.execute(f"DROP TABLE IF EXISTS {self.table_name};")
         return existed
 
 
-    def upsert(self, items: List[VectorRecord]) -> List[str]:
+    def upsert(self, items: list[VectorRecord]) -> list[str]:
         if not items:
             return []
 
@@ -106,14 +105,14 @@ class VectorRepository(BaseRepository):
                     FROM {self.table_name} 
                     WHERE {self.id_column_name} IN ({placeholders});"""
 
-        rows = self._fetch_all(query, tuple(ids))
+        rows = self.db.fetch_all(query, tuple(ids))
 
         existing_created_at_map = {
             row[0]: row[1]
             for row in rows
         }
 
-        now = get_datetime_utc()
+        now = get_datetime_local()
         batch_metadatas = []
 
         for item in items:
@@ -140,10 +139,10 @@ class VectorRepository(BaseRepository):
         if not fields:
             return
 
-        fields["updated_at"] = get_datetime_utc()
+        fields["updated_at"] = get_datetime_local()
 
         set_clause = ", ".join(f"{k} = %s" for k in fields)
-        res = self._execute(
+        res = self.db.execute(
             f"""UPDATE {self.table_name} 
                 SET {set_clause} 
                 WHERE {self.id_column_name} = %s;""",
@@ -160,11 +159,11 @@ class VectorRepository(BaseRepository):
             *[c.name for c in self.metadata_columns],
         ]
 
-        rows = self._fetch_all(f"""SELECT {', '.join(cols)} 
+        rows = self.db.fetch_all(f"""SELECT {', '.join(cols)} 
                                    FROM {self.table_name};""")
         
         return [dict(row) for row in rows]
 
 
-    def search_by_query(self, query: str, k: int, filters: dict[str, Any] | None) -> List[tuple[Document, float]]:
+    def search_by_query(self, query: str, k: int, filters: dict[str, Any] | None) -> list[tuple[Document, float]]:
         return self.store.similarity_search_with_score(query=query, k=k, filter=filters)

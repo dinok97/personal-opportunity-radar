@@ -2,7 +2,6 @@ from typing import Optional
 from datetime import datetime
 
 import sys
-from dotenv import load_dotenv
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))

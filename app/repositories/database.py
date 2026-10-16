@@ -1,6 +1,7 @@
 from psycopg_pool import ConnectionPool
 from langchain_postgres.v2.engine import PGEngine
 from psycopg.rows import dict_row
+from typing import Optional
 
 class Database:
     def __init__(self, connection_string: str):
@@ -20,17 +21,19 @@ class Database:
             url=lc_url
         )
 
-    def execute(self, sql: str, params: tuple = ()):
+    def execute(self, sql: str, params: tuple = ()) -> int:
         with self.pool.connection() as conn:
-            return conn.execute(sql, params)
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(sql, params)
+                return cur.rowcount
 
-    def fetch_one(self, sql: str, params: tuple = ()):
+    def fetch_one(self, sql: str, params: tuple = ()) -> Optional[dict]:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(sql, params)
                 return cur.fetchone()
 
-    def fetch_all(self, sql: str, params: tuple = ()):
+    def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(sql, params)

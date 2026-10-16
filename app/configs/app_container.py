@@ -6,9 +6,10 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from repositories.database import Database
-from services.embedding_service import EmbeddingService
+from services.common.embedding_service import EmbeddingService
 from repositories.job_repository import JobRepository
 from repositories.search_schedule_repository import SearchScheduleRepository
+from repositories.user_respository import UserRepository
 
 
 load_dotenv()
@@ -28,6 +29,9 @@ class AppContainer:
 
         self.searchschedule_repository = SearchScheduleRepository(self.db)
         self.searchschedule_repository.setup()
+
+        self.user_repository = UserRepository(db=self.db, embedding_service=self.embedding_service)
+        self.user_repository.setup()
 
     def close(self):
         self.db.close()

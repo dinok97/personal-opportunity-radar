@@ -3,44 +3,47 @@ import tldextract
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional
-from helpers.constants import IMAGE_MD_PATTERN, LINK_MD_PATTERN, BARE_URL_PATTERN, DATE_FORMAT_DEFAULT
+from zoneinfo import ZoneInfo
+from helpers.constants import (
+    JOBTECH_DATETIME_FORMAT, 
+    IMAGE_MD_PATTERN, 
+    LINK_MD_PATTERN, 
+    BARE_URL_PATTERN
+)
+import uuid
+import re
 
-def get_base_domain(url: str) -> str:
-    extracted = tldextract.extract(url)
-    return f"{extracted.domain}.{extracted.suffix}"
+SWEDEN_TZ = ZoneInfo("Europe/Stockholm")
 
-def normalize_url(url: str) -> str:
-    parsed = urlparse(url)
-    clean = parsed._replace(
-        netloc=parsed.netloc.lower(),
-        path=parsed.path.rstrip("/") or "/",
-        params="",
-        query="",
-        fragment="",
-    )
-    return urlunparse(clean)
+def get_datetime_local() -> datetime:
+    return datetime.now(SWEDEN_TZ)
 
-def get_hashed_id(canonical_id: str):
-    return hashlib.sha256(canonical_id.encode()).hexdigest()[:16]
-
-
-def get_datetime_utc():
-    return datetime.now(timezone.utc)
-
-
-def get_formatted_datetime(date: datetime, format=DATE_FORMAT_DEFAULT):
-    if date is None:
+def format_datetime(dt, format=JOBTECH_DATETIME_FORMAT) -> str:
+    if dt is None:
         return ""
     
-    return date.strftime(format)
+    return dt.strftime(format)
+
+def to_swedish_time(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=SWEDEN_TZ)
+    return dt.astimezone(SWEDEN_TZ)
+
+def parse_datetime_isoformat(date_str: str) -> datetime:
+    dt = datetime.fromisoformat(date_str.strip().replace("Z", "+00:00"))
+    return to_swedish_time(dt)
 
 
-def get_datetime_from_str_utc(date: str, format=DATE_FORMAT_DEFAULT) -> Optional[datetime]:
-    if date is None:
-        return None
+def clean_text(text: str) -> str:
+    for ch in ("\xa0", "\u202f"):                
+        text = text.replace(ch, " ")
+    for ch in ("\ufeff", "\u200b", "\xad"):       
+        text = text.replace(ch, "")
+    text = re.sub(r"[ \t]+", " ", text)           
+    text = re.sub(r" *\n *", "\n", text)       
+    text = re.sub(r"\n{3,}", "\n\n", text)      
+    return text.strip()
 
-    parsed = datetime.strptime(date, format)
-    return parsed.replace(tzinfo=timezone.utc)
 
 def clean_content_links(text):
     text = IMAGE_MD_PATTERN.sub("", text)
@@ -48,3 +51,11 @@ def clean_content_links(text):
     text = BARE_URL_PATTERN.sub("", text)
 
     return text
+
+
+def get_hashed_id(canonical_id: str):
+    return hashlib.sha256(canonical_id.encode()).hexdigest()[:16]
+
+
+def get_uuid() -> str:
+    return str(uuid.uuid4())

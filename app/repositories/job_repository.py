@@ -1,12 +1,11 @@
 import sys
-from dotenv import load_dotenv
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from repositories.vector_repository import VectorRepository
-from models.vector_record import VectorRecord
+from dto.vector_record import VectorRecord
 
 from langchain_postgres.v2.engine import Column
 
@@ -21,6 +20,7 @@ from helpers.constants import (
     JOBS_TABLE_COMPANY,
     JOBS_TABLE_LOCATIONS,
     JOBS_TABLE_SPECIALIZATION,
+    JOBS_TABLE_APPLICATION_DEADLINE_AT,
     JOBS_TABLE_EMPLOYMENT_TYPE,
     JOBS_TABLE_SKILLS,
     JOBS_TABLE_EXEC_SUMMARY,
@@ -44,6 +44,7 @@ class JobRepository(VectorRepository):
         Column(name=JOBS_TABLE_LOCATIONS, data_type="TEXT"),
         Column(name=JOBS_TABLE_POSTED_AT, data_type="TIMESTAMPTZ"),
         Column(name=JOBS_TABLE_SPECIALIZATION, data_type="TEXT"),
+        Column(name=JOBS_TABLE_APPLICATION_DEADLINE_AT, data_type="TIMESTAMPTZ"),
         Column(name=JOBS_TABLE_EMPLOYMENT_TYPE, data_type="TEXT"),
         Column(name=JOBS_TABLE_SKILLS, data_type="TEXT"),
         Column(name=JOBS_TABLE_EXEC_SUMMARY, data_type="TEXT"),
@@ -62,7 +63,7 @@ class JobRepository(VectorRepository):
                     FROM {self.table_name} 
                     WHERE {self.id_column_name} IN ({placeholders})"""
         
-        rows = self._fetch_all(query, tuple(ids))
+        rows = self.db.fetch_all(query, tuple(ids))
         
         existing_ids = {row[self.id_column_name] for row in rows}
 
@@ -70,7 +71,7 @@ class JobRepository(VectorRepository):
 
 
     def save_jobs(self, jobs: list[Job]) -> list[str]:
-        batch_items: List[VectorRecord] = []
+        batch_items: list[VectorRecord] = []
         
         for job in jobs:
             vec_rec = VectorRecord(
@@ -87,6 +88,7 @@ class JobRepository(VectorRepository):
                     JOBS_TABLE_EMPLOYMENT_TYPE: job.employment_type,
                     JOBS_TABLE_SKILLS: job.skills,
                     JOBS_TABLE_EXEC_SUMMARY: job.executive_summary,
+                    JOBS_TABLE_APPLICATION_DEADLINE_AT: job.application_deadline_at,
                     JOBS_TABLE_IS_ACTIVE: job.is_active,
                     JOBS_TABLE_IS_DELETED: job.is_deleted,
                 }
@@ -105,7 +107,7 @@ class JobRepository(VectorRepository):
                     FROM {self.table_name} 
                     WHERE {self.id_column_name} = %s"""
 
-        row = self._fetch_one(query, (id,))
+        row = self.db.fetch_one(query, (id,))
 
         if row:        
             job = Job(
@@ -116,15 +118,17 @@ class JobRepository(VectorRepository):
                 company = row[JOBS_TABLE_COMPANY],
                 locations = row[JOBS_TABLE_LOCATIONS],
                 posted_at = row[JOBS_TABLE_POSTED_AT],
-                executive_summary = row[JOBS_TABLE_EXEC_SUMMARY],
                 employment_type = row[JOBS_TABLE_EMPLOYMENT_TYPE],
+                executive_summary = row[JOBS_TABLE_EXEC_SUMMARY],
                 specialization = row[JOBS_TABLE_SPECIALIZATION],
+                application_deadline_at=row[JOBS_TABLE_APPLICATION_DEADLINE_AT],
                 skills = row[JOBS_TABLE_SKILLS],
                 is_active = row[JOBS_TABLE_IS_ACTIVE],
                 is_deleted = row[JOBS_TABLE_IS_DELETED],
             )
 
         return job or None
+
 
     def get_jobs_by_query(self, query: str, k: int):
         

@@ -5,15 +5,17 @@ import os
 
 from langchain_huggingface import HuggingFaceEmbeddings
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from helpers.constants import EMBEDDING_MODEL, EMBEDDING_MODEL_REVISION
 
 load_dotenv()
 
+
 hf_token = os.getenv("HF_TOKEN")
 if hf_token is None:
     raise ValueError("HF_TOKEN not found - check your .env file or environment")
+
 
 class EmbeddingService():
     def __init__(self) -> None:

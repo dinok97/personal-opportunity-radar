@@ -1,26 +1,10 @@
 from pydantic import BaseModel
-from typing import List, Optional
 
-class WorkExperience(BaseModel):
-    role: str
-    company: str
-    years: float
-    description: str
-    key_work_skills: List[str]
-
-
-class Project(BaseModel):
-    name: str
-    description: str
-    tech_stack: List[str]
-
-
-class UserProfile(BaseModel):
-    user_id: int
-    target_roles: List[str]
-    skills: List[str]
-    preferred_cities: List[str] = []
-    additional_requirements: List[str] = []
-
-    work_history: List[WorkExperience] = []
-    projects: List[Project] = []
+class Profile(BaseModel):
+    id: str
+    full_name: str
+    target_roles: str
+    technical_skills: str
+    preferred_employment_types: str 
+    is_deleted: bool = False
+    cv_text: str
