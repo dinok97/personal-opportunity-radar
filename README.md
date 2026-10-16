@@ -16,8 +16,8 @@ Before running the project, create a `.env` file in the project root and add the
 - GROQ_API_KEY=your_groq_api_key
 - DB_CONNECTION_STR=your_render_external_database_connection_string
 - HF_TOKEN=your_huggingface_token
-- JOBSEARCH_START_DATE=2026-10-01
-- JOBSEARCH_END_DATE=2026-10-10
+- JOBSEARCH_START_DATE=2026-10-01 (YYYY-MM-DD)
+- JOBSEARCH_END_DATE=2026-10-10 (YYYY-MM-DD)
 
 ## Installation
 
