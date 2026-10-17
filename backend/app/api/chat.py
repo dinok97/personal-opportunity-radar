@@ -26,6 +26,15 @@ from ..services.pdf_extraction import CvPdfExtractionError, extract_pdf_pages
 from ..services.cv_vector_service import CvEmbeddingError, CvVectorService
 from ..services.job_service import JobServiceUnavailableError, get_job_service
 
+
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from ..agentic_flow.agent_flow import run_agent
+
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
@@ -72,9 +81,8 @@ async def _read_pdf(upload: UploadFile | None) -> tuple[str, bytes] | None:
 
     return file_name, content
 
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(request: Request) -> ChatResponse:
+@router.post("/chat2", response_model=ChatResponse)
+async def chat2(request: Request) -> ChatResponse:
     content_type = request.headers.get("content-type", "")
     prompt = ""
     raw_messages: str | None = None
@@ -233,9 +241,7 @@ async def chat(request: Request) -> ChatResponse:
                 current_messages,
                 f"""CV CONTEXT:
                 {_cv_context(cv_documents)}
-
-                OPPORTUNITY CONTEXT:
-                {_job_context(jobs)}""",
+                """
             )
             source = "ollama"
         except OllamaError as exc:
@@ -243,17 +249,10 @@ async def chat(request: Request) -> ChatResponse:
             raise HTTPException(status_code=502, detail="The AI provider is unavailable") from exc
     elif settings.openrouter_api_key:
         try:
-            # message = await OpenRouterClient(settings).complete(
-            #     current_messages,
-            #     _job_context(jobs),
-            # )
             message = await OpenRouterClient(settings).complete(
                 current_messages,
                 f"""CV CONTEXT:
                 {_cv_context(cv_documents)}
-
-                OPPORTUNITY CONTEXT:
-                {_job_context(jobs)}
                 """,
             )
             source = "openrouter"
@@ -266,28 +265,13 @@ async def chat(request: Request) -> ChatResponse:
             "Add OPENROUTER_API_KEY to enable live responses."
         )
 
-    # if cv_chunks:
-    #     try:
-    #         CvVectorService(settings).replace_active_cv(cv_chunks)
-    #     except (
-    #         CvEmbeddingError,
-    #         CvVectorConfigurationError,
-    #         CvVectorDimensionError,
-    #         CvVectorSchemaError,
-    #         SQLAlchemyError,
-    #     ) as exc:
-    #         logger.exception("CV upload could not be persisted")
-    #         raise HTTPException(
-    #             status_code=503,
-    #             detail="CV storage is unavailable",
-    #         ) from exc
-
     if file_name:
         message = f"I received {file_name}. {message}"
     
     print("profile", user_profile)
 
     return ChatResponse(
+        thread_id="",
         message=message,
         jobs=jobs,
         source=source,
@@ -296,3 +280,215 @@ async def chat(request: Request) -> ChatResponse:
         document_id=document_id if cv_chunks else None,
         user_profile=user_profile,
     )
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(chat_request: ChatRequest, request: Request) -> ChatResponse:
+    content_type = request.headers.get("content-type", "")
+    prompt = ""
+    raw_messages: str | None = None
+    file: UploadFile | None = None
+ 
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        prompt = str(form.get("prompt") or "")
+        raw_messages = str(form.get("messages")) if form.get("messages") else None
+        form_file = form.get("file")
+        if isinstance(form_file, UploadFile) or hasattr(form_file, "read"):
+            file = form_file
+    else:
+        try:
+            body = await request.json()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
+        try:
+            #data = ChatRequest.model_validate(await request.json())
+            data = chat_request
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail="Invalid chat request") from exc
+        
+        prompt = data.prompt
+        thread_id = data.thread_id
+ 
+    if "multipart/form-data" in content_type:
+        history = _parse_messages(raw_messages)
+ 
+    clean_prompt = prompt.strip()
+    if not clean_prompt and not history and file is None:
+        raise HTTPException(status_code=400, detail="prompt, messages, or a PDF file is required")
+ 
+    if file is not None:
+        return await handle_file(file, clean_prompt, history)
+    else:
+        return await handle_chat(clean_prompt, thread_id)
+ 
+ 
+async def handle_file(
+    file: UploadFile,
+    clean_prompt: str,
+    history: list[ChatMessage],
+) -> ChatResponse:
+    pdf_upload = await _read_pdf(file)
+    file_name = pdf_upload[0] if pdf_upload else None
+    cv_chunks: list[CvChunk] = []
+    document_id: str | None = None
+    user_profile = None
+    if pdf_upload:
+        file_name, pdf_content = pdf_upload
+        try:
+            pages = extract_pdf_pages(pdf_content)
+        except CvPdfExtractionError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+ 
+        document_id = str(uuid4())
+        cv_chunks = chunk_cv_pages(
+            pages,
+            document_id=document_id,
+            filename=file_name,
+        )
+        if not cv_chunks:
+            raise HTTPException(status_code=422, detail="The PDF contains no text to store")
+ 
+    jobs = []
+    current_messages = [*history]
+    if clean_prompt:
+        current_messages.append(ChatMessage(role="user", content=clean_prompt))
+    elif file_name:
+        current_messages.append(
+            ChatMessage(
+                role="user",
+                content="Review my uploaded CV and suggest relevant opportunities.",
+            )
+        )
+ 
+    settings = get_settings()
+ 
+    if pdf_upload:
+        if settings.llm_provider == "ollama":
+            extraction_client = OllamaClient(settings, system_prompt=CV_EXTRACTION_SYSTEM_PROMPT)
+        elif settings.openrouter_api_key:
+            extraction_client = OpenRouterClient(
+                settings,
+                system_prompt=CV_EXTRACTION_SYSTEM_PROMPT,
+            )
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail="A configured AI provider is required to extract a CV profile",
+            )
+ 
+        cv_text = "\n\n".join(page.text for page in pages)
+        try:
+            extraction_result = await CvExtractionService(extraction_client).extract_profile(
+                cv_text
+            )
+        except CvExtractionError as exc:
+            logger.warning("CV profile extraction failed: %s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail="The AI provider could not extract a valid CV profile",
+            ) from exc
+        if not extraction_result.is_cv:
+            raise HTTPException(
+                status_code=422,
+                detail=f"The uploaded document is not a CV: {extraction_result.rejection_reason}",
+            )
+        if extraction_result.user_profile is None:
+            raise HTTPException(
+                status_code=502,
+                detail="The AI provider did not return a CV profile",
+            )
+        user_profile = extraction_result.user_profile
+ 
+    cv_documents = []
+ 
+    if cv_chunks:
+        cv_service = CvVectorService(settings)
+        try:
+            cv_service.replace_active_cv(cv_chunks, profile=user_profile)
+        except (
+            CvEmbeddingError,
+            CvVectorConfigurationError,
+            CvVectorDimensionError,
+            CvVectorSchemaError,
+            SQLAlchemyError,
+        ) as exc:
+            logger.exception("CV storage could not be completed")
+            raise HTTPException(
+                status_code=503,
+                detail="CV storage is unavailable",
+            ) from exc
+ 
+    if clean_prompt and (cv_chunks or settings.pgvector_connection_string):
+        try:
+            cv_service = CvVectorService(settings)
+            cv_documents = cv_service.search(clean_prompt, k=5)
+        except (
+            CvEmbeddingError,
+            CvVectorConfigurationError,
+            CvVectorDimensionError,
+            CvVectorSchemaError,
+            SQLAlchemyError,
+        ) as exc:
+            logger.exception("CV retrieval could not be completed")
+            raise HTTPException(
+                status_code=503,
+                detail="CV retrieval is unavailable",
+            ) from exc
+ 
+    source = "demo"
+    if settings.llm_provider == "ollama":
+        try:
+            message = await OllamaClient(settings).complete(
+                current_messages,
+                f"""CV CONTEXT:
+                {_cv_context(cv_documents)}
+                """,
+            )
+            source = "ollama"
+        except OllamaError as exc:
+            logger.warning("Ollama request failed: %s", exc)
+            raise HTTPException(status_code=502, detail="The AI provider is unavailable") from exc
+    elif settings.openrouter_api_key:
+        try:
+            message = await OpenRouterClient(settings).complete(
+                current_messages,
+                f"""CV CONTEXT:
+                {_cv_context(cv_documents)}
+                """,
+            )
+            source = "openrouter"
+        except OpenRouterError as exc:
+            logger.warning("OpenRouter request failed: %s", exc)
+            raise HTTPException(status_code=502, detail="The AI provider is unavailable") from exc
+    else:
+        message = (
+            f"Demo mode is active. I found {len(jobs)} opportunities matching your profile. "
+            "Add OPENROUTER_API_KEY to enable live responses."
+        )
+ 
+    if file_name:
+        message = f"I received {file_name}. {message}"
+ 
+    print("profile", user_profile)
+ 
+    return ChatResponse(
+        thread_id="",
+        message=message,
+        jobs=jobs,
+        source=source,
+        file_name=file_name,
+        cv_uploaded=bool(cv_chunks),
+        document_id=document_id if cv_chunks else None,
+        user_profile=user_profile,
+    )
+ 
+ 
+async def handle_chat(
+    prompt: str,
+    thread_id: str
+) -> ChatResponse:
+    if not prompt:
+            raise HTTPException(status_code=400, detail="prompt is required")
+    
+    return await run_agent(prompt, thread_id)

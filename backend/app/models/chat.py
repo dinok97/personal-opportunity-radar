@@ -12,11 +12,13 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    thread_id: str
     prompt: str = Field(default="", max_length=20_000)
     messages: list[ChatMessage] = Field(default_factory=list, max_length=50)
 
 
 class ChatResponse(BaseModel):
+    thread_id: str
     message: str
     jobs: list[JobSearchResult] = Field(default_factory=list)
     source: Literal["openrouter", "ollama", "demo"]
@@ -24,3 +26,4 @@ class ChatResponse(BaseModel):
     cv_uploaded: bool = False
     document_id: str | None = None
     user_profile: UserProfile | None = None
+    plan_used: str | None = None
