@@ -31,6 +31,8 @@ EMBEDDING_MODEL=jinaai/jina-embeddings-v5-text-nano
 EMBEDDING_MODEL_REVISION=8a7f00a
 ```
 
+The jobs endpoints use `PGVECTOR_CONNECTION_STRING` to connect to the shared PostgreSQL database.
+
 The model is downloaded from Hugging Face the first time a CV is uploaded and runs locally through `sentence-transformers`. The default model produces 768-dimensional vectors. It is licensed under CC BY-NC 4.0, which does not permit commercial use without permission from Jina AI.
 
 Enable the PGVector extension in the database before the first upload:
@@ -62,6 +64,8 @@ Endpoints:
 - `GET /health`
 - `POST /api/chat`
 - `GET /api/profile/{document_id}`
+- `GET /api/jobs/search?query=python&k=10`
+- `GET /api/jobs/{job_id}`
 
 The chat endpoint accepts JSON requests with `prompt` and `messages`, or multipart requests with those fields plus an optional PDF. PDF uploads are extracted and stored in PGVector before the response confirms success.
 The profile endpoint returns the extracted active profile for a CV `document_id` returned by the chat endpoint, or HTTP 404 when no profile exists for that document.

@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .jobs import JobMatch
+from .job import JobSearchResult
 from .profile import UserProfile
 
 
@@ -18,7 +18,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
-    jobs: list[JobMatch] = Field(default_factory=list)
+    jobs: list[JobSearchResult] = Field(default_factory=list)
     source: Literal["openrouter", "ollama", "demo"]
     file_name: str | None = None
     cv_uploaded: bool = False

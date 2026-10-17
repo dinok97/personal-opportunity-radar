@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { jobMatches, type JobMatch } from "@/lib/mock-data";
+import type { JobMatch } from "@/lib/mock-data";
 
 type UserProfile = {
   full_name: string | null;
@@ -12,16 +12,47 @@ type UserProfile = {
   technical_skills: string[];
 };
 
+type BackendJobSearchResult = {
+  job: {
+    external_id: string;
+    title: string;
+    company: string;
+    source: string;
+    locations: string;
+    employment_type: string | null;
+    skills: string;
+    executive_summary: string;
+    embedding_text: string;
+  };
+  score: number;
+};
+
+type DashboardJob = {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  type: string | null;
+  salary: string | null;
+  matchScore: number | null;
+  relevanceScore: number | null;
+  description: string;
+  tags: string[];
+  reasons: string[];
+  missingSkills: string[];
+  source: string;
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  jobs?: JobMatch[];
+  jobs?: DashboardJob[];
 };
 
 type ChatApiResponse = {
   message?: string;
-  jobs?: JobMatch[];
+  jobs?: Array<BackendJobSearchResult | JobMatch>;
   detail?: string;
   cv_uploaded?: boolean;
   document_id?: string | null;
@@ -29,7 +60,43 @@ type ChatApiResponse = {
 
 const PROFILE_DOCUMENT_KEY = "opportunity-radar-profile-document-id";
 const PROFILE_DOCUMENT_EVENT = "profile-document-updated";
-const defaultJobs = jobMatches.slice(0, 3);
+
+function toDashboardJob(result: BackendJobSearchResult | JobMatch): DashboardJob {
+  if ("job" in result) {
+    const job = result.job;
+    return {
+      id: job.external_id,
+      title: job.title,
+      company: job.company,
+      location: job.locations || null,
+      type: job.employment_type,
+      salary: null,
+      matchScore: null,
+      relevanceScore: result.score,
+      description: job.executive_summary || job.embedding_text,
+      tags: job.skills.split(/[,;\n]/).map((skill) => skill.trim()).filter(Boolean),
+      reasons: [],
+      missingSkills: [],
+      source: job.source,
+    };
+  }
+
+  return {
+    id: result.id,
+    title: result.title,
+    company: result.company,
+    location: result.location,
+    type: result.type,
+    salary: result.salary,
+    matchScore: result.matchScore,
+    relevanceScore: null,
+    description: result.description,
+    tags: result.tags,
+    reasons: result.reasons,
+    missingSkills: result.missingSkills,
+    source: result.source,
+  };
+}
 
 function subscribeToProfileDocument(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -51,11 +118,10 @@ export function AICareerDashboard() {
       role: "assistant",
       content:
         "Hi! Upload your CV to build your profile and find relevant opportunities, or ask me about roles you have in mind.",
-      jobs: defaultJobs,
     },
   ]);
   const [draft, setDraft] = useState("");
-  const [selectedJob, setSelectedJob] = useState<JobMatch | null>(defaultJobs[0]);
+  const [selectedJob, setSelectedJob] = useState<DashboardJob | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -221,12 +287,12 @@ export function AICareerDashboard() {
         content:
           data.message ||
           "I found a few great opportunities for you. I can narrow them by remote, type, or required skills.",
-        jobs: data.jobs || defaultJobs,
+        jobs: data.jobs?.map(toDashboardJob) ?? [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
       if (data.jobs?.length) {
-        setSelectedJob(data.jobs[0]);
+        setSelectedJob(toDashboardJob(data.jobs[0]));
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "The chat service is unavailable.";
@@ -239,7 +305,6 @@ export function AICareerDashboard() {
           id: nextMessageId("assistant"),
           role: "assistant",
           content: errorMessage,
-          jobs: defaultJobs,
         },
       ]);
     } finally {
@@ -429,15 +494,21 @@ export function AICareerDashboard() {
                                 <p className="text-base font-semibold text-slate-900">{job.title}</p>
                                 <p className="mt-1 text-sm text-slate-500">{job.company}</p>
                               </div>
-                              <span className="rounded-full bg-[#ecfdf5] px-2 py-1 text-[11px] font-medium text-[#166534]">
-                                {job.matchScore}%
-                              </span>
+                              {job.relevanceScore !== null ? (
+                                <span className="rounded-full bg-[#ecfdf5] px-2 py-1 text-[11px] font-medium text-[#166534]">
+                                  Score {job.relevanceScore.toFixed(2)}
+                                </span>
+                              ) : job.matchScore !== null ? (
+                                <span className="rounded-full bg-[#ecfdf5] px-2 py-1 text-[11px] font-medium text-[#166534]">
+                                  {job.matchScore}%
+                                </span>
+                              ) : null}
                             </div>
 
                             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500">
-                              <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.location}</span>
-                              <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.type}</span>
-                              <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.salary}</span>
+                              {job.location && <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.location}</span>}
+                              {job.type && <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.type}</span>}
+                              {job.salary && <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.salary}</span>}
                             </div>
                           </button>
                         ))}
@@ -552,27 +623,48 @@ export function AICareerDashboard() {
               <p className="mt-1 text-sm text-slate-500">{selectedJob.company}</p>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[11px] font-medium text-[#166534]">
-                  {selectedJob.matchScore}% match
-                </span>
-                <span className="rounded-full border border-[#e5e7eb] px-2.5 py-1 text-[11px] text-slate-600">
-                  {selectedJob.location}
-                </span>
+                {selectedJob.relevanceScore !== null && (
+                  <span className="rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[11px] font-medium text-[#166534]">
+                    Relevance score {selectedJob.relevanceScore.toFixed(2)}
+                  </span>
+                )}
+                {selectedJob.matchScore !== null && (
+                  <span className="rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[11px] font-medium text-[#166534]">
+                    {selectedJob.matchScore}% match
+                  </span>
+                )}
+                {selectedJob.location && (
+                  <span className="rounded-full border border-[#e5e7eb] px-2.5 py-1 text-[11px] text-slate-600">
+                    {selectedJob.location}
+                  </span>
+                )}
+                {selectedJob.type && (
+                  <span className="rounded-full border border-[#e5e7eb] px-2.5 py-1 text-[11px] text-slate-600">
+                    {selectedJob.type}
+                  </span>
+                )}
               </div>
 
-              <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Why it matches</p>
-                <ul className="mt-3 space-y-3 text-sm text-slate-600">
-                  {selectedJob.reasons.map((reason) => (
-                    <li key={reason} className="flex gap-2">
-                      <span className="mt-2 h-2 w-2 rounded-full bg-slate-900" />
-                      <span>{reason}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {selectedJob.reasons.length > 0 ? (
+                <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Why it matches</p>
+                  <ul className="mt-3 space-y-3 text-sm text-slate-600">
+                    {selectedJob.reasons.map((reason) => (
+                      <li key={reason} className="flex gap-2">
+                        <span className="mt-2 h-2 w-2 rounded-full bg-slate-900" />
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : selectedJob.description ? (
+                <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Role summary</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{selectedJob.description}</p>
+                </div>
+              ) : null}
 
-              <div className="mt-6">
+              {selectedJob.tags.length > 0 && <div className="mt-6">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Skills</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedJob.tags.map((tag) => (
@@ -581,16 +673,16 @@ export function AICareerDashboard() {
                     </span>
                   ))}
                 </div>
-              </div>
+              </div>}
 
-              <div className="mt-6 rounded-2xl border border-[#fef3c7] bg-[#fffbeb] p-4">
+              {selectedJob.missingSkills.length > 0 && <div className="mt-6 rounded-2xl border border-[#fef3c7] bg-[#fffbeb] p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a16207]">Needs attention</p>
                 <ul className="mt-3 space-y-2 text-sm text-[#7c5a00]">
                   {selectedJob.missingSkills.map((skill) => (
                     <li key={skill}>• {skill}</li>
                   ))}
                 </ul>
-              </div>
+              </div>}
 
               <div className="mt-6 space-y-3">
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700">

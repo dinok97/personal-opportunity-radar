@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from types import SimpleNamespace
 
 import httpx
@@ -10,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.app.config import Settings, get_settings
 from backend.app.main import app
 from backend.app.models import ChatMessage, CvExtractionResult, UserProfile
+from backend.app.models.job import Job, JobSearchResult
 from backend.app.ollama import OllamaClient, OllamaError
 from backend.app.openrouter import OpenRouterClient
 from backend.app.repositories.cv_vector_repository import CvVectorConfigurationError
@@ -20,6 +22,34 @@ from backend.app.services.cv_vector_service import CvEmbeddingError
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def mock_job_service(monkeypatch):
+    job = Job(
+        external_id="job-123",
+        title="Remote ML Engineer",
+        company="Example Labs",
+        source="Job Board",
+        url="https://example.com/jobs/123",
+        posted_at=None,
+        locations="Remote",
+        specialization="Machine Learning",
+        employment_type="Full-time",
+        skills="Python, PyTorch",
+        application_deadline_at=datetime(2026, 12, 31),
+        executive_summary="Build machine learning systems.",
+        embedding_text="Remote ML Engineer at Example Labs",
+    )
+
+    class FakeJobService:
+        def search_jobs(self, query, k):
+            return [JobSearchResult(job=job, score=0.8)]
+
+    monkeypatch.setattr(
+        "backend.app.api.chat.get_job_service",
+        lambda: FakeJobService(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -148,7 +178,8 @@ def test_demo_chat_returns_frontend_contract(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["source"] == "demo"
-    assert payload["jobs"][0]["location"] == "Remote"
+    assert payload["jobs"][0]["job"]["locations"] == "Remote"
+    assert payload["jobs"][0]["score"] == 0.8
     assert payload["message"]
 
 
