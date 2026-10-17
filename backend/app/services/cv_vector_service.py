@@ -11,7 +11,7 @@ from .cv_chunking import CvChunk
 from functools import lru_cache
 from sentence_transformers import CrossEncoder
 
-CV_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L6-v2"
+from ..helpers.constants import CV_RERANKER_MODEL
 
 
 @lru_cache(maxsize=1)

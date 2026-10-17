@@ -8,8 +8,9 @@ from backend.app.services.job_service import JobService
 
 
 class FakeJobRepository:
-    def __init__(self, job: Job) -> None:
+    def __init__(self, job: Job, additional_jobs: list[Job] | None = None) -> None:
         self.job = job
+        self.jobs = [job, *(additional_jobs or [])]
         self.query = None
         self.k = None
         self.job_id = None
@@ -24,13 +25,28 @@ class FakeJobRepository:
         return [
             (
                 Document(
-                    id=self.job.external_id,
-                    page_content=self.job.embedding_text,
-                    metadata=self.job.model_dump(exclude={"external_id", "embedding_text"}),
+                    id=job.external_id,
+                    page_content=job.embedding_text,
+                    metadata=job.model_dump(exclude={"external_id", "embedding_text"}),
                 ),
-                0.12,
+                0.12 + index,
             )
-        ][:k]
+            for index, job in enumerate(self.jobs[:k])
+        ]
+
+
+class FakeReranker:
+    def __init__(self, rankings: list[dict[str, float | int]]) -> None:
+        self.rankings = rankings
+        self.query = None
+        self.documents = None
+        self.top_k = None
+
+    def rank(self, query: str, documents: list[str], *, top_k: int):
+        self.query = query
+        self.documents = documents
+        self.top_k = top_k
+        return self.rankings[:top_k]
 
 
 def make_job() -> Job:
@@ -55,13 +71,37 @@ def make_job() -> Job:
 
 def test_search_jobs_maps_repository_documents_to_typed_results() -> None:
     repository = FakeJobRepository(make_job())
-    service = JobService(repository)
+    service = JobService(repository, reranker=FakeReranker([{"corpus_id": 0, "score": 0.88}]))
 
     results = service.search_jobs("  machine learning ", k=4)
 
-    assert results == [JobSearchResult(job=make_job(), score=0.12)]
+    assert results == [JobSearchResult(job=make_job(), score=0.88)]
     assert repository.query == "machine learning"
-    assert repository.k == 4
+    assert repository.k == 20
+
+
+def test_search_jobs_returns_candidates_in_reranker_order() -> None:
+    first_job = make_job()
+    second_job = first_job.model_copy(
+        update={"external_id": "job-456", "title": "Senior ML Engineer"}
+    )
+    repository = FakeJobRepository(first_job, [second_job])
+    reranker = FakeReranker(
+        [
+            {"corpus_id": 1, "score": 0.95},
+            {"corpus_id": 0, "score": 0.20},
+        ]
+    )
+    service = JobService(repository, reranker=reranker)
+
+    results = service.search_jobs("machine learning", k=1, candidate_k=2)
+
+    assert [result.job.external_id for result in results] == ["job-456"]
+    assert results[0].score == 0.95
+    assert reranker.query == "machine learning"
+    assert reranker.documents == [first_job.embedding_text, second_job.embedding_text]
+    assert reranker.top_k == 1
+    assert repository.k == 2
 
 
 def test_search_jobs_rejects_empty_query_and_invalid_limit() -> None:
@@ -71,6 +111,8 @@ def test_search_jobs_rejects_empty_query_and_invalid_limit() -> None:
         service.search_jobs("  ")
     with pytest.raises(ValueError, match="greater than 0"):
         service.search_jobs("Python", k=0)
+    with pytest.raises(ValueError, match="candidate_k must be greater than or equal to k"):
+        service.search_jobs("Python", k=2, candidate_k=1)
 
 
 def test_get_job_delegates_to_repository() -> None:
