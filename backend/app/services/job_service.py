@@ -73,7 +73,7 @@ class JobService:
         return [
             JobSearchResult(
                 job=results[item["corpus_id"]].job,
-                score=float(item["score"]), # the similarity score, not relevance score
+                score=float(item["score"]),
             )
             for item in ranked
         ]

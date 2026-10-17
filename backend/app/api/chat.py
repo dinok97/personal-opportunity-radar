@@ -8,9 +8,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import get_settings
 from ..models import ChatMessage, ChatRequest, ChatResponse
+from ..models.job import JobSearchResult
 from ..ollama import OllamaClient, OllamaError
 from ..openrouter import OpenRouterClient, OpenRouterError
-from ..opportunities import find_opportunities
 from ..repositories.cv_vector_repository import (
     CvVectorConfigurationError,
     CvVectorDimensionError,
@@ -24,6 +24,7 @@ from ..services.cv_extraction_service import (
 )
 from ..services.pdf_extraction import CvPdfExtractionError, extract_pdf_pages
 from ..services.cv_vector_service import CvEmbeddingError, CvVectorService
+from ..services.job_service import JobServiceUnavailableError, get_job_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -31,10 +32,12 @@ router = APIRouter(prefix="/api")
 MAX_PDF_BYTES = 10 * 1024 * 1024
 
 
-def _job_context(jobs: list) -> str:
+def _job_context(jobs: list[JobSearchResult]) -> str:
     return "\n".join(
-        f"- {job.title} at {job.company}: {job.location}; {job.type}; skills: {', '.join(job.tags)}"
-        for job in jobs
+        f"- {result.job.title} at {result.job.company}: {result.job.locations}; "
+        f"{result.job.employment_type or 'Employment type not listed'}; "
+        f"skills: {result.job.skills}; {result.job.executive_summary or result.job.embedding_text}"
+        for result in jobs
     )
 
 
@@ -124,7 +127,14 @@ async def chat(request: Request) -> ChatResponse:
         if not cv_chunks:
             raise HTTPException(status_code=422, detail="The PDF contains no text to store")
 
-    jobs = find_opportunities(clean_prompt or "all")
+    try:
+        jobs = get_job_service().search_jobs(clean_prompt or "all", k=5)
+    except JobServiceUnavailableError as exc:
+        logger.exception("Job search service is unavailable")
+        raise HTTPException(status_code=503, detail="Job search is unavailable") from exc
+    except Exception as exc:
+        logger.exception("Job search failed")
+        raise HTTPException(status_code=503, detail="Job search is unavailable") from exc
     current_messages = [*history]
     if clean_prompt:
         current_messages.append(ChatMessage(role="user", content=clean_prompt))
