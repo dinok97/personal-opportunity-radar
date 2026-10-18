@@ -6,6 +6,11 @@ from sqlalchemy import create_engine
 
 from ..config import get_settings
 
+import asyncio, sys
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 
 class Database:
     def __init__(self, connection_string: str) -> None:

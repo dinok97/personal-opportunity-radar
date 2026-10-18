@@ -1,5 +1,6 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
+from langchain_core.messages import HumanMessage
 
 from .state import FlowStep
 from .agents.supervisor import supervisor_node
@@ -43,7 +44,7 @@ graph = build_graph()
 
 async def run_agent(question: str, thread_id: str) -> ChatResponse:
     result = await graph.ainvoke(
-        {"question": question},
+        {"messages": [HumanMessage(content=question)]},
         {"configurable": {"thread_id": thread_id}}
     )
 
@@ -52,7 +53,7 @@ async def run_agent(question: str, thread_id: str) -> ChatResponse:
     return ChatResponse(
         thread_id=thread_id,
         message=result.get('ans', ''),
-        jobs=[],
+        jobs=result.get('jobs', []),
         source="demo",
         plan_used= result.get('route_summary', "")
     )

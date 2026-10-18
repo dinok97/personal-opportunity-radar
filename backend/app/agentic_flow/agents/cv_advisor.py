@@ -8,9 +8,8 @@ from ..helpers.agent_util import get_last_ai_text
 from ..prompts import CV_ADVISOR_PROMPT
 from ..tools import get_user_profile
 
-CV_ADVISOR_TEMP = 0.1
+CV_ADVISOR_TEMP = 0
 CV_ADVISOR_MAX_TOKENS = 800
-CV_ADVISOR_RECURSION_LIMIT = 5
 
 
 llm = get_groq(temp=CV_ADVISOR_TEMP, max_tokens=CV_ADVISOR_MAX_TOKENS)
@@ -27,7 +26,6 @@ def cv_advisor_node(state: FlowStep) -> dict:
     try:
         out = cv_advisor_agent.invoke(
             {"messages": [HumanMessage(content=step.task)]},
-            {"recursion_limit": CV_ADVISOR_RECURSION_LIMIT},
         )
         output = get_last_ai_text(out["messages"]) or "The CV advisor did not produce an answer."
     except GraphRecursionError:

@@ -4,8 +4,10 @@ from langchain_groq import ChatGroq
 
 load_dotenv()
 
-AGENT_LLM="openai/gpt-oss-20b"
-AGENT_REASONING="low"
+#AGENT_LLM="openai/gpt-oss-20b"
+AGENT_LLM="qwen/qwen3.8-27b"
+#AGENT_REASONING="low"
+AGENT_REASONING="none"
 
 
 def get_groq(temp, max_tokens):

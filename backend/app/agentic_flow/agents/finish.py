@@ -16,13 +16,13 @@ def finish_node(state: FlowStep):
     steps_list = state.get("steps", [])
 
     if steps_list:
-        route_summary += " -> ".join([step.agent for step in steps_list if step])
+        route_summary += " -> ".join([SUPERVISOR] + [step.agent for step in steps_list if step])
     else:
         route_summary = f"{SUPERVISOR} -> direct reply"
 
     return {
         "ans": final,
-        "messages": [HumanMessage(content=state["question"]), AIMessage(content=final)],
+        "messages": [AIMessage(content=final)],
         "steps": [],
-        "route_summary": route_summary 
+        "route_summary": route_summary
     }

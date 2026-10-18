@@ -24,7 +24,11 @@ def _load_embedding_model(model_name: str, model_revision: str):
             "prompt_name": "document",
             "convert_to_numpy": True,
         },
-        query_encode_kwargs={"normalize_embeddings": True, "prompt_name": "query"}
+        query_encode_kwargs={
+            "task": "retrieval",
+            "normalize_embeddings": True, 
+            "prompt_name": "query"
+        }
     )
 
 
