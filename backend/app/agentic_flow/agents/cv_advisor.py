@@ -4,11 +4,11 @@ from langgraph.errors import GraphRecursionError
 
 from ..state import FlowStep
 from ..generation.llm_service import get_groq
-from ..helpers.agent_util import get_last_ai_text
+from ..helpers.agent_util import get_last_ai_text, task_with_context
 from ..prompts import CV_ADVISOR_PROMPT
 from ..tools import get_user_profile
 
-CV_ADVISOR_TEMP = 0
+CV_ADVISOR_TEMP = 0.1
 CV_ADVISOR_MAX_TOKENS = 800
 
 
@@ -23,9 +23,11 @@ cv_advisor_agent = create_agent(
 def cv_advisor_node(state: FlowStep) -> dict:
     step, *rest = state["plans"]
 
+    content = task_with_context(step, state)
+
     try:
         out = cv_advisor_agent.invoke(
-            {"messages": [HumanMessage(content=step.task)]},
+            {"messages": [HumanMessage(content=content)]},
         )
         output = get_last_ai_text(out["messages"]) or "The CV advisor did not produce an answer."
     except GraphRecursionError:

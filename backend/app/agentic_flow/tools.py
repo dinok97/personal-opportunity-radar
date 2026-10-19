@@ -5,6 +5,7 @@ from ..services.job_service import get_job_service
 from ..models.job import JobSearchResult
 from ..services.cv_vector_service import CvVectorService
 from ..config import get_settings
+from .helpers.agent_util import deadline_text
 
 
 @tool(response_format="content_and_artifact")
@@ -32,25 +33,26 @@ def search_jobs(queries: list[str]) -> tuple[str, list[JobSearchResult]]:
     return "\n".join(summaries), list(cards.values())
 
 
-@tool
-def get_job_details(job_id: str) -> str:
+@tool(response_format="content_and_artifact")
+def get_job_details(job_id: str) -> tuple[str, str]:
     """Read the details of one job posting: title, company, location, type, skills and description.
     Input: the job id, a number given in the task or in the earlier results."""
     try:
         job = get_job_service().get_job(job_id)
     except Exception:
         print("get_job_details failed for id %s", job_id)
-        return "The job could not be loaded."
+        return "The job could not be loaded.", ""
     if not job:
-        return "Job not found."
+        return "Job not found.", ""
 
     description = (job.executive_summary or "").strip()[:2500]
     return (
-        f"[{job.external_id}] {job.title} | {job.company} | {job.locations} | {job.employment_type} | {job.url}\n"
+        f"{job.title} | {job.company} | {job.locations} | {job.employment_type} | {job.url}\n"
         f"Specialization: {job.specialization}\n"
         f"Skills: {job.skills}\n"
+        f"Application deadline: {deadline_text(job.application_deadline_at)}\n"
         f"Description: {description}"
-    )
+    ), job.external_id
 
 
 @tool

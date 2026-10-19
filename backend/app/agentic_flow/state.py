@@ -13,5 +13,6 @@ class FlowStep(TypedDict):
     route_summary: str
     results: list[dict]
     jobs: list[JobSearchResult]
+    latest_searched_job_ids: list[str]
     direct_ans: str
     ans: str
