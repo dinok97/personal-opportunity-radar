@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Protocol
+from typing import Optional
 
 from langchain_core.documents import Document
 from sentence_transformers import CrossEncoder
@@ -38,6 +38,12 @@ class JobService:
         query: str,
         k: int = 10,
         candidate_k: int = 20,
+        posted_before_days: Optional[int] = None,
+        posted_after_days: Optional[int] = None,
+        posted_on_days: Optional[int] = None,
+        deadline_before_days: Optional[int] = None,
+        deadline_after_days: Optional[int] = None,
+        deadline_on_days: Optional[int] = None
     ) -> list[JobSearchResult]:
         clean_query = query.strip()
         if not clean_query:
@@ -47,7 +53,14 @@ class JobService:
         if candidate_k < k:
             raise ValueError("candidate_k must be greater than or equal to k")
 
-        matches = self.repository.get_jobs_by_query(clean_query, candidate_k)
+        matches = self.repository.get_jobs_by_query(clean_query, 
+                                                    candidate_k,
+                                                    posted_before_days=posted_before_days,
+                                                    posted_after_days=posted_after_days,
+                                                    posted_on_days=posted_on_days,
+                                                    deadline_before_days=deadline_before_days,
+                                                    deadline_after_days=deadline_after_days,
+                                                    deadline_on_days=deadline_on_days)
         results = []
         for document, score in matches:
             job_data = dict(document.metadata)

@@ -16,7 +16,7 @@ RETRY_LIMIT=2
 
 def supervisor_node(state: FlowStep):    
     history = list(state.get("messages", []))[-20:]
-    system = SUPERVISOR_PROMPT + load_profile_summary() + jobs_block(state)
+    system = SUPERVISOR_PROMPT + load_profile_summary() + jobs_block(state.get('latest_searched_jobs') or [])
 
     messages = [SystemMessage(content=system), 
                 *history]
@@ -24,24 +24,25 @@ def supervisor_node(state: FlowStep):
     llm = get_groq(temp=SUPERVISOR_TEMP, max_tokens=SUPERVISOR_MAX_TOKENS)
     llm_with_structured_output = llm.with_structured_output(SupervisorOutput)
 
+    output: SupervisorOutput | None = None
     for _ in range(RETRY_LIMIT):
         try:
-            output: SupervisorOutput = llm_with_structured_output.invoke(messages)
+            result = llm_with_structured_output.invoke(messages)
         except Exception as e:
             print("Supervisor failed: %s", e)
+            continue
+        
+        if result.plans or (result.direct_ans or "").strip():
+            output = result
+            break  
 
-        if output.plans or (output.direct_ans or "").strip():
-            break   
+    if output is None:
+        return {"plans": [], "steps": [], "direct_ans": EMPTY_REPLY, "results": [], "jobs": []}
 
     if output.plans:
-        print(output.plans[:MAX_ALLOWED_STEPS])
         plans = output.plans[:MAX_ALLOWED_STEPS]
-        return {"plans": plans, "steps": plans, "direct_ans": "", "results": [], "jobs": [], "latest_searched_job_ids": []}
+        return {"plans": plans, "steps": plans, "direct_ans": "", "results": [], "jobs": []}
 
-    reply = (output.direct_ans or "").strip()
-    if not reply:
-        print("Supervisor returned neither plans nor a reply")
-        reply = EMPTY_REPLY
 
-    return {"plans": [], "steps": [], "direct_ans": reply, "results": [], "jobs": [], "latest_searched_job_ids": []}
+    return {"plans": [], "steps": [], "direct_ans": output.direct_ans.strip() or EMPTY_REPLY, "results": [], "jobs": []}
     

@@ -313,7 +313,7 @@ async def chat(chat_request: ChatRequest, request: Request) -> ChatResponse:
     if "multipart/form-data" in content_type:
         history = _parse_messages(raw_messages)
  
-    clean_prompt = prompt.strip()
+    clean_prompt = (prompt or "").strip()
     if not clean_prompt and not history and file is None:
         raise HTTPException(status_code=400, detail="prompt, messages, or a PDF file is required")
  

@@ -1,5 +1,5 @@
 from collections.abc import Callable, Mapping
-from typing import Any, Protocol
+from typing import Optional
 
 from langchain_core.documents import Document
 from langchain_postgres import PGVectorStore
@@ -9,6 +9,7 @@ from ..services.embedding_service import HuggingFaceEmbeddingClient
 from ..models.job import Job
 from .database import Database
 from ..helpers.constants import *
+from ..helpers.utils import date_conditions
 
 
 class JobRepository:
@@ -75,14 +76,21 @@ class JobRepository:
         return Job.model_validate(job_data)
 
     def get_jobs_by_query(
-        self,
-        query: str,
-        k: int,
-    ) -> list[tuple[Document, float]]:
-        filters = {
-            "$and": [
+            self,
+            query: str,
+            k: int,
+            posted_before_days: Optional[int] = None,
+            posted_after_days: Optional[int] = None,
+            posted_on_days: Optional[int] = None,
+            deadline_before_days: Optional[int] = None,
+            deadline_after_days: Optional[int] = None,
+            deadline_on_days: Optional[int] = None,
+        ) -> list[tuple[Document, float]]:
+            conditions = [
                 {"is_active": {"$eq": True}},
                 {"is_deleted": {"$eq": False}},
+                *date_conditions(JOBS_TABLE_POSTED_AT, -1, posted_before_days, posted_after_days, posted_on_days),
+                *date_conditions(JOBS_TABLE_APPLICATION_DEADLINE_AT, +1, deadline_before_days, deadline_after_days, deadline_on_days)
             ]
-        }
-        return self.store.similarity_search_with_score(query=query, k=k, filter=filters)
+        
+            return self.store.similarity_search_with_score(query=query, k=k, filter={"$and": conditions})

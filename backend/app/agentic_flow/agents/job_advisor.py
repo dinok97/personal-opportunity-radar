@@ -7,7 +7,7 @@ from ..generation.llm_service import get_groq
 from ..helpers.agent_util import get_last_ai_text
 from ..prompts import JOB_ADVISOR_PROMPT
 from ..tools import get_job_details, search_jobs
-from ...models.job import JobSearchResult
+from ...models.job import JobSearchResult, Job
 
 
 JOB_ADVISOR_TEMP = 0.1
@@ -25,8 +25,6 @@ job_advisor_agent = create_agent(
 
 def job_advisor_node(state: FlowStep) -> dict:
     step, *rest = state["plans"]
-    new_jobs: list[JobSearchResult] = []  
-    new_job_ids: list[str] | None = None
     out = None
 
     content = step.task
@@ -41,45 +39,70 @@ def job_advisor_node(state: FlowStep) -> dict:
         print("agent run failed for task: %s", step.task) 
         out, output = None, "The job search could not be completed."
 
+
+    new_jobs_search = []
+    update_cache = False
+    old_jobs = state.get("latest_searched_jobs", [])
+
+
     if out is not None:
+        collected = True
+
         try:
-            new_jobs, new_job_ids = collect_jobs(out["messages"])
+            new_jobs_search = collect_jobs(out["messages"])
         except Exception:
             print("collect_jobs failed")
+            collected = False
 
-        if not new_job_ids or len(new_job_ids) == 0:
-            for m in out["messages"]:
-                print ("msg type=%s name=%s artifact=%s", m.type, getattr(m, "name", None),
-                        type(getattr(m, "artifact", None)).__name__)
-            
-        output = get_last_ai_text(out["messages"]) or "The job search did not produce an answer."
+        searched = any(
+            m.type == "tool" and getattr(m, "name", "") == "search_jobs"
+            for m in out["messages"]
+        )
 
-    update = {}
-    if new_job_ids is not None:
-        old = state.get("latest_searched_job_ids", []) if state.get("jobs") else []
-        update["latest_searched_job_ids"] = old + new_job_ids
+        if searched and collected:
+            first_search_this_turn = not state.get("jobs")
+            base = [] if first_search_this_turn else old_jobs
+            known = {job.external_id for job in base}
+            old_jobs = base + [card.job for card in new_jobs_search if card.job.external_id not in known]
+            update_cache = True
+        
+    output = get_last_ai_text(out["messages"]) or "The job search did not produce an answer."
+    
 
-    return {"results": [*state.get("results", []), {"agent": step.agent, "task": step.task, "output": output}],
-            "plans": rest,
-            "jobs": [*state.get("jobs", []), *new_jobs],
-            **update} 
+    update = {
+        "results": [*state.get("results", []), {"agent": step.agent, "task": step.task, "output": output}],
+        "plans": rest,
+        "jobs": [*state.get("jobs", []), *new_jobs_search],
+    }
 
+    if update_cache:
+        update["latest_searched_jobs"] = old_jobs
 
+    return update
 
-def collect_jobs(messages: list) -> tuple[list[JobSearchResult], list[str] | None]:
-    """Returns (cards, ids). ids is None when no useful tool call happened, so the list stays unchanged."""
+def collect_jobs(messages: list) -> list[JobSearchResult]:
     cards: list[JobSearchResult] = []
-    job_ids: list[str] | None = None
-    for m in messages:
-        if m.type != "tool":
+    for message in messages:
+        if message.type != "tool" or getattr(message, "name", "") != "search_jobs":
             continue
-        name = getattr(m, "name", "")
-        artifact = getattr(m, "artifact", None)
-        if name == "search_jobs":
-            job_ids = job_ids or []                  
-            for c in artifact or []:
-                cards.append(c)
-                job_ids.append(str(c.job.external_id))
-        elif name == "get_job_details" and artifact:    
-            job_ids = (job_ids or []) + [str(artifact)]
-    return cards, job_ids
+        if getattr(message, "status", "success") == "error":
+            continue
+        cards.extend(getattr(message, "artifact", None) or [])
+    return cards
+
+# def collect_jobs(messages: list) -> list[JobSearchResult] | None:
+#     """Returns (cards, ids). ids is None when no useful tool call happened, so the list stays unchanged."""
+#     cards: list[JobSearchResult] = []
+#     print(messages)
+#     for m in messages:
+#         if m.type != "tool":
+#             continue
+#         name = getattr(m, "name", "")
+#         artifact = getattr(m, "artifact", None)
+#         is_invalid = getattr(m, "invalid_tool_calls", None)
+#         if name == "search_jobs" and not is_invalid:
+#             job_ids = job_ids or []                  
+#             for c in artifact or []:
+#                 cards.append(c)
+
+#     return cards

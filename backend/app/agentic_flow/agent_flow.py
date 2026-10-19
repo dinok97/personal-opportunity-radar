@@ -11,9 +11,10 @@ from .helpers.agent_constants import (
     SUPERVISOR,
     JOB_SEARCH_AGENT,
     CV_AGENT,
-    FINISH
+    FINISH,
 )
 from ..models.chat import ChatResponse
+from .prompts import EMPTY_REQUEST_REPLY
 
 
 def route(state: FlowStep) -> str:
@@ -43,6 +44,15 @@ graph = build_graph()
 
 
 async def run_agent(question: str, thread_id: str) -> ChatResponse:
+    if not question or not question.strip():
+        return ChatResponse(
+            thread_id=thread_id,
+            message=EMPTY_REQUEST_REPLY,
+            jobs=[],
+            source="demo",
+            plan_used="direct reply",
+        )
+
     result = await graph.ainvoke(
         {"messages": [HumanMessage(content=question)]},
         {"configurable": {"thread_id": thread_id}}

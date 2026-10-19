@@ -1,5 +1,5 @@
 from .models.plan import Plan
-from ..models.job import JobSearchResult
+from ..models.job import JobSearchResult, Job
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -13,6 +13,6 @@ class FlowStep(TypedDict):
     route_summary: str
     results: list[dict]
     jobs: list[JobSearchResult]
-    latest_searched_job_ids: list[str]
+    latest_searched_jobs: list[Job]
     direct_ans: str
     ans: str

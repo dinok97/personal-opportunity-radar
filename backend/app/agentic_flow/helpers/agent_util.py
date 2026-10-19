@@ -4,18 +4,20 @@ from zoneinfo import ZoneInfo
 
 LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
-
 def deadline_text(deadline: datetime | None) -> str:
     if deadline is None:
         return "not stated"
     if deadline.tzinfo is None:                   
         deadline = deadline.replace(tzinfo=LOCAL_TZ)
+
+    date = deadline.strftime("%Y-%m-%d")
     days = (deadline - datetime.now(deadline.tzinfo)).days
+
     if days < 0:
-        return "the deadline has passed"
+        return f"{date} (the deadline has passed)"
     if days == 0:
-        return "today"
-    return f"in {days} day{'s' if days != 1 else ''}"
+        return f"{date} (today)"
+    return f"{date} (in {days} day{'s' if days != 1 else ''})"
 
 
 def get_last_ai_text(messages: list) -> str:
@@ -29,12 +31,6 @@ def get_last_ai_text(messages: list) -> str:
         if content:
             return content
     return ""
-
-def jobs_block(state) -> str:
-    ids = state.get("latest_searched_job_ids", [])
-    lines = [f"{i}. [{j}]" for i, j in enumerate(ids, 1)]
-    return "\n\nJobs shown (from your previous reply, in card order):\n" + ("\n".join(lines) if lines else "none")
-
 
 def task_with_context(step, state, limit=2500) -> str:
     prev = ""
@@ -63,3 +59,11 @@ def clean_text(text) -> str:
     text = text.split("</think>")[-1]                        
     text = text.replace("<think>", "")                      
     return text.strip()
+
+
+def jobs_block(jobs: list) -> str:
+    lines = []
+    for job in jobs:
+        places = ", ".join(job.locations) if isinstance(job.locations, list) else (job.locations or "")
+        lines.append(f"[{job.external_id}] {job.title} | {job.company} | {places}")
+    return "\n\nJobs shown (from your previous reply):\n" + ("\n".join(lines) if lines else "none")

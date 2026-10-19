@@ -20,17 +20,15 @@ def finish_node(state: FlowStep) -> dict:
 
     if not reply:
         outputs = [r["output"] for r in results]
-        if len(outputs) <= 1:
-            reply = "\n".join(outputs)
-        else:
-            try:
-                body = "\n\n".join(f"[{r['agent']}] {r['output']}" for r in results)
-                msg = llm.invoke([SystemMessage(content=FINAL_PROMPT),
-                                  HumanMessage(content=f"Question: {state['messages'][-1]}\n\nResults:\n{body}")])
-                reply = clean_text(msg.content)
-            except Exception:
-                print("Final answer failed")
-                reply = "\n\n".join(outputs)
+        try:
+            body = "\n\n".join(f"[{r['agent']}] {r['output']}" for r in results)
+            msg = llm.invoke([SystemMessage(content=FINAL_PROMPT),
+                              HumanMessage(content=f"Question: {state['messages'][-1]}\n\nResults:\n{body}")])
+            reply = clean_text(msg.content)
+        except Exception:
+            print("Final answer failed")
+            reply = "\n\n".join(outputs)
+            
 
     reply = reply or EMPTY_REPLY
 
