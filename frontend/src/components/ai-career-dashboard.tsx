@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { JobMatch } from "@/lib/mock-data";
 
 type UserProfile = {
@@ -15,6 +17,7 @@ type UserProfile = {
 type BackendJobSearchResult = {
   job: {
     external_id: string;
+    url: string;
     title: string;
     company: string;
     source: string;
@@ -24,18 +27,19 @@ type BackendJobSearchResult = {
     executive_summary: string;
     embedding_text: string;
   };
-  score: number;
+  // score: number;
 };
 
 type DashboardJob = {
   id: string;
+  url: string | null;
   title: string;
   company: string;
   location: string | null;
   type: string | null;
   salary: string | null;
   matchScore: number | null;
-  relevanceScore: number | null;
+  // relevanceScore: number | null;
   description: string;
   tags: string[];
   reasons: string[];
@@ -66,13 +70,14 @@ function toDashboardJob(result: BackendJobSearchResult | JobMatch): DashboardJob
     const job = result.job;
     return {
       id: job.external_id,
+      url: job.url || null,
       title: job.title,
       company: job.company,
       location: job.locations || null,
       type: job.employment_type,
       salary: null,
       matchScore: null,
-      relevanceScore: result.score,
+      // relevanceScore: result.score,
       description: job.executive_summary || job.embedding_text,
       tags: job.skills.split(/[,;\n]/).map((skill) => skill.trim()).filter(Boolean),
       reasons: [],
@@ -83,13 +88,14 @@ function toDashboardJob(result: BackendJobSearchResult | JobMatch): DashboardJob
 
   return {
     id: result.id,
+    url: null,
     title: result.title,
     company: result.company,
     location: result.location,
     type: result.type,
     salary: result.salary,
     matchScore: result.matchScore,
-    relevanceScore: null,
+    // relevanceScore: null,
     description: result.description,
     tags: result.tags,
     reasons: result.reasons,
@@ -191,6 +197,9 @@ export function AICareerDashboard() {
       ? profileLoad.status
       : "loading";
   const currentProfile = profile?.documentId === profileDocumentId ? profile.data : null;
+  const welcomeMessage = profileStatus === "empty"
+    ? "Hi! Upload your CV to build your profile and find relevant opportunities, or ask me about roles you have in mind."
+    : `Hi, ${currentProfile?.full_name || "there"}! What kind of opportunities are you looking for?`;
 
   const validatePdfFile = (file: File | null) => {
     if (!file) return true;
@@ -314,10 +323,10 @@ export function AICareerDashboard() {
   }
 
   const quickPrompts = [
-    "Find me remote ML jobs",
-    "Show AI internships in Berlin",
-    "Compare me with LLM roles",
+    `Find me remote ${currentProfile?.professional_field || "ML"} jobs`,
+    `Show AI internships in ${currentProfile?.location || "your area"}`,
   ];
+  const hasJobResults = messages.some((message) => Boolean(message.jobs?.length));
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] text-[#111827]">
@@ -337,8 +346,8 @@ export function AICareerDashboard() {
             {[
               { label: "Dashboard", tab: "dashboard" as const },
               { label: "My profile", tab: "profile" as const },
-              { label: "Matches" },
-              { label: "Saved jobs" },
+              // { label: "Matches" },
+              // { label: "Saved jobs" },
             ].map((item) => (
               <button
                 key={item.label}
@@ -474,7 +483,15 @@ export function AICareerDashboard() {
                           : "bg-transparent text-slate-700"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      {message.role === "assistant" ? (
+                        <div className="break-words [&_a]:text-blue-700 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:py-0.5 [&_h1]:my-3 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:my-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:my-2 [&_h3]:font-semibold [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-3 [&_pre]:text-slate-100 [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-200 [&_th]:bg-slate-50 [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc [&_ul]:pl-5">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {message.id === "welcome" ? welcomeMessage : message.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                      )}
                     </div>
 
                     {message.jobs && message.jobs.length > 0 && (
@@ -494,11 +511,12 @@ export function AICareerDashboard() {
                                 <p className="text-base font-semibold text-slate-900">{job.title}</p>
                                 <p className="mt-1 text-sm text-slate-500">{job.company}</p>
                               </div>
-                              {job.relevanceScore !== null ? (
+                              {/* {job.relevanceScore !== null ? (
                                 <span className="rounded-full bg-[#ecfdf5] px-2 py-1 text-[11px] font-medium text-[#166534]">
                                   Score {job.relevanceScore.toFixed(2)}
                                 </span>
-                              ) : job.matchScore !== null ? (
+                              ) : */}
+                              {job.matchScore !== null ? (
                                 <span className="rounded-full bg-[#ecfdf5] px-2 py-1 text-[11px] font-medium text-[#166534]">
                                   {job.matchScore}%
                                 </span>
@@ -532,17 +550,19 @@ export function AICareerDashboard() {
 
           <div className={`${activeTab === "dashboard" ? "" : "hidden"} border-t border-[#f1f5f9] bg-white px-4 py-4 md:px-6`}>
             <div className="mx-auto max-w-3xl">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => sendPrompt(prompt)}
-                    className="rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-3 py-1.5 text-xs text-slate-600 transition hover:border-[#d1d5db] hover:bg-[#f3f4f6]"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
+              {!hasJobResults && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {quickPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => sendPrompt(prompt)}
+                      className="rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-3 py-1.5 text-xs text-slate-600 transition hover:border-[#d1d5db] hover:bg-[#f3f4f6]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {selectedFile && (
                 <div className="mb-2 flex items-center justify-between rounded-xl border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-xs text-slate-600">
@@ -589,10 +609,11 @@ export function AICareerDashboard() {
 
                 <textarea
                   value={draft}
+                  disabled={Boolean(selectedFile)}
                   onChange={(event) => setDraft(event.target.value)}
                   rows={1}
                   placeholder="Ask for jobs, internships, or fit analysis..."
-                  className="max-h-36 min-h-[48px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                  className="max-h-36 min-h-[48px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
@@ -623,11 +644,11 @@ export function AICareerDashboard() {
               <p className="mt-1 text-sm text-slate-500">{selectedJob.company}</p>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                {selectedJob.relevanceScore !== null && (
+                {/* {selectedJob.relevanceScore !== null && (
                   <span className="rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[11px] font-medium text-[#166534]">
                     Relevance score {selectedJob.relevanceScore.toFixed(2)}
                   </span>
-                )}
+                )} */}
                 {selectedJob.matchScore !== null && (
                   <span className="rounded-full bg-[#ecfdf5] px-2.5 py-1 text-[11px] font-medium text-[#166534]">
                     {selectedJob.matchScore}% match
@@ -684,14 +705,25 @@ export function AICareerDashboard() {
                 </ul>
               </div>}
 
-              <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                disabled={!selectedJob.url}
+                onClick={() => {
+                  if (selectedJob.url) window.open(selectedJob.url, "_blank", "noopener,noreferrer");
+                }}
+                className="mt-6 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Apply this Job
+              </button>
+
+              {/* <div className="mt-6 space-y-3">
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700">
                   Save job
                 </button>
                 <button className="w-full rounded-xl border border-[#e5e7eb] bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   Compare with profile
                 </button>
-              </div>
+              </div> */}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-slate-400">
