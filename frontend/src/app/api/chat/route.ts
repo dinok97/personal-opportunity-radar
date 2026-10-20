@@ -14,10 +14,12 @@ export async function POST(request: NextRequest) {
     if (isMultipartRequest) {
       const formData = await request.formData();
       const forwardedForm = new FormData();
+      const threadId = formData.get("thread_id");
       const prompt = formData.get("prompt");
       const messages = formData.get("messages");
       const uploadedFile = formData.get("file");
 
+      if (typeof threadId === "string") forwardedForm.append("thread_id", threadId);
       if (typeof prompt === "string") forwardedForm.append("prompt", prompt);
       if (typeof messages === "string") forwardedForm.append("messages", messages);
       if (uploadedFile instanceof File) forwardedForm.append("file", uploadedFile, uploadedFile.name);
