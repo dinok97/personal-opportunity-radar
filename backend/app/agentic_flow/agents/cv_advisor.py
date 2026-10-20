@@ -5,8 +5,11 @@ from langgraph.errors import GraphRecursionError
 from ..state import FlowStep
 from ..generation.llm_service import get_groq
 from ..helpers.agent_util import get_last_ai_text, task_with_context
-from ..prompts import CV_ADVISOR_PROMPT
 from ..tools import get_user_profile
+from ..prompts import (
+    CV_ADVISOR_PROMPT,
+    ONE_JOB_REPLY
+)
 
 CV_ADVISOR_TEMP = 0.1
 CV_ADVISOR_MAX_TOKENS = 800
@@ -14,10 +17,14 @@ CV_ADVISOR_MAX_TOKENS = 800
 
 llm = get_groq(temp=CV_ADVISOR_TEMP, max_tokens=CV_ADVISOR_MAX_TOKENS)
 
+advisor_prompt = CV_ADVISOR_PROMPT.format(
+    ONE_JOB_REPLY=ONE_JOB_REPLY
+)
+
 cv_advisor_agent = create_agent(
     model=llm,
     tools=[get_user_profile],
-    system_prompt=CV_ADVISOR_PROMPT
+    system_prompt=advisor_prompt
 )
 
 def cv_advisor_node(state: FlowStep) -> dict:

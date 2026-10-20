@@ -2,10 +2,11 @@ from langchain_core.tools import tool
 from typing import Any, Optional
 
 from ..services.job_service import get_job_service
-from ..models.job import JobSearchResult, Job
+from ..models.job import JobSearchResult
 from ..services.cv_vector_service import CvVectorService
 from ..config import get_settings
 from .helpers.agent_util import deadline_text
+from .helpers.agent_constants import MAX_JOB_IDS_HANDLE
 
 
 @tool(response_format="content_and_artifact")
@@ -36,7 +37,7 @@ def search_jobs(queries: list[str],
     }
     limits_text = ", ".join(f"{name} {n} days" for name, n in limits.items() if n is not None)
 
-    print("From tool:-----\n\n")
+    print("From search_jobs tool:\n\n")
 
     cards: dict[Any, JobSearchResult] = {}
     summaries = []
@@ -60,41 +61,60 @@ def search_jobs(queries: list[str],
         print("search_jobs failed for queries: %s", queries)
         return "Search failed.", []
 
-    print("From tool:-----\n\n", len(cards))
-
     if limits_text:
         summaries.append(f"Date limits applied: {limits_text}.")
 
     return "\n".join(summaries), list(cards.values())
 
-
 @tool
-def get_job_details(job_id: str) -> str:
-    """Read the details of one job posting: title, company, location, type, skills and description.
-    Input: the job id, a number given in the task or in the earlier results."""
+def get_job_details(job_ids: list[str]) -> str:
+    """Read job postings by id. One id returns the full posting. Several ids return one short line per job
+    (title, company, location, type, posted date, deadline). Call it once with all ids of the task."""
 
-    try:
-        job = get_job_service().get_job(job_id)
-    except Exception:
-        print("get_job_details failed for id %s", job_id)
-        return "The job could not be loaded."
-    if not job:
-        return "Job not found."
+    ids = list(dict.fromkeys(str(i).strip() for i in job_ids if str(i).strip()))[:MAX_JOB_IDS_HANDLE]
+    if not ids:
+        return "No information is available for that job."
 
-    description = (job.executive_summary or "").strip()[:2500]
-    return (
-        f"{job.title} | {job.company} | {job.locations} | {job.employment_type} | {job.url}\n"
-        f"Specialization: {job.specialization}\n"
-        f"Skills: {job.skills}\n"
-        f"Application deadline: {deadline_text(job.application_deadline_at)}\n"
-        f"Description: {description}"
-    )
+    blocks = []
+    for job_id in ids:
+        try:
+            job = get_job_service().get_job(job_id)
+        except Exception:
+            print("get_job_details failed for id %s", job_id)
+            blocks.append("The job could not be looked up.")
+            continue
+        if not job:
+            blocks.append("No information is available for that job.")
+            continue
+
+        posted = job.posted_at.date().isoformat() if job.posted_at else "not given"
+        deadline = deadline_text(job.application_deadline_at)
+
+        if len(ids) == 1:
+            description = (job.executive_summary or "").strip()[:2500]
+            blocks.append(
+                f"{job.title} | {job.company} | {job.locations} | {job.employment_type} | {job.url}\n"
+                f"Specialization: {job.specialization}\n"
+                f"Skills: {job.skills}\n"
+                f"Posted: {posted}\n"
+                f"Application deadline: {deadline}\n"
+                f"Description: {description}"
+            )
+        else:
+            blocks.append(
+                f"{job.title} | {job.company} | {job.locations} | {job.employment_type} | "
+                f"Locations: {job.locations} |"
+                f"Posted: {posted} | Application deadline: {deadline}"
+            )
+    return "\n\n".join(blocks)
 
 
 @tool
 def get_user_profile(query: str) -> str:
     """Read the candidate's stored CV and profile. Input: what to look for in the CV, in plain words,
     e.g. 'skills and experience', 'projects with LLMs', 'education'. Returns the matching parts of the CV."""
+
+    print("From get_job_details tool:\n\n")
 
     try:
         documents = CvVectorService(get_settings()).search(query=query, k=5)

@@ -58,8 +58,6 @@ async def run_agent(question: str, thread_id: str) -> ChatResponse:
         {"configurable": {"thread_id": thread_id}}
     )
 
-    print(result)
-
     return ChatResponse(
         thread_id=thread_id,
         message=result.get('ans', ''),

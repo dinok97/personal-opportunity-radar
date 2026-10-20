@@ -5,9 +5,14 @@ from langgraph.errors import GraphRecursionError
 from ..state import FlowStep
 from ..generation.llm_service import get_groq
 from ..helpers.agent_util import get_last_ai_text
-from ..prompts import JOB_ADVISOR_PROMPT
 from ..tools import get_job_details, search_jobs
 from ...models.job import JobSearchResult, Job
+from ..prompts import (
+    JOB_ADVISOR_PROMPT,
+    TITLE_REPLY,
+    LOAD_FAILED_REPLY,
+    MANY_JOBS_REPLY
+)
 
 
 JOB_ADVISOR_TEMP = 0.1
@@ -16,10 +21,16 @@ JOB_ADVISOR_MAX_TOKENS = 800
 
 llm = get_groq(temp=JOB_ADVISOR_TEMP, max_tokens=JOB_ADVISOR_MAX_TOKENS)
 
+advisor_prompt = JOB_ADVISOR_PROMPT.format(
+    TITLE_REPLY=TITLE_REPLY,
+    LOAD_FAILED_REPLY=LOAD_FAILED_REPLY,
+    MANY_JOBS_REPLY=MANY_JOBS_REPLY
+)
+
 job_advisor_agent = create_agent(
     model=llm,
     tools=[search_jobs, get_job_details],
-    system_prompt=JOB_ADVISOR_PROMPT
+    system_prompt=advisor_prompt
 )
 
 
@@ -89,20 +100,3 @@ def collect_jobs(messages: list) -> list[JobSearchResult]:
             continue
         cards.extend(getattr(message, "artifact", None) or [])
     return cards
-
-# def collect_jobs(messages: list) -> list[JobSearchResult] | None:
-#     """Returns (cards, ids). ids is None when no useful tool call happened, so the list stays unchanged."""
-#     cards: list[JobSearchResult] = []
-#     print(messages)
-#     for m in messages:
-#         if m.type != "tool":
-#             continue
-#         name = getattr(m, "name", "")
-#         artifact = getattr(m, "artifact", None)
-#         is_invalid = getattr(m, "invalid_tool_calls", None)
-#         if name == "search_jobs" and not is_invalid:
-#             job_ids = job_ids or []                  
-#             for c in artifact or []:
-#                 cards.append(c)
-
-#     return cards

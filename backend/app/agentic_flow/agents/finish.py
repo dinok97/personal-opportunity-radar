@@ -1,10 +1,13 @@
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from ..state import FlowStep
-from ..prompts import EMPTY_REPLY, FINAL_PROMPT
 from ..helpers.agent_constants import SUPERVISOR
 from ..generation.llm_service import get_groq
 from ..helpers.agent_util import clean_text
+from ..prompts import (
+    FINAL_PROMPT,
+    EMPTY_REPLY
+)
 
 FINAL_NODE_TEMP = 0.1
 FINAL_NODE_MAX_TOKENS = 900
@@ -20,10 +23,12 @@ def finish_node(state: FlowStep) -> dict:
 
     if not reply:
         outputs = [r["output"] for r in results]
+        question = next((m.content for m in reversed(state["messages"]) if m.type == "human"), "")
+
         try:
             body = "\n\n".join(f"[{r['agent']}] {r['output']}" for r in results)
             msg = llm.invoke([SystemMessage(content=FINAL_PROMPT),
-                              HumanMessage(content=f"Question: {state['messages'][-1]}\n\nResults:\n{body}")])
+                              HumanMessage(content=f"Question: {question}\n\nResults:\n{body}")])
             reply = clean_text(msg.content)
         except Exception:
             print("Final answer failed")
@@ -34,6 +39,8 @@ def finish_node(state: FlowStep) -> dict:
 
     route_summary = ""
     steps_list = state.get("steps", [])
+
+    print(steps_list)
 
     if steps_list:
         route_summary += " -> ".join([SUPERVISOR] + [step.agent for step in steps_list if step])

@@ -14,5 +14,6 @@ class FlowStep(TypedDict):
     results: list[dict]
     jobs: list[JobSearchResult]
     latest_searched_jobs: list[Job]
+    off_topic_part: bool
     direct_ans: str
     ans: str

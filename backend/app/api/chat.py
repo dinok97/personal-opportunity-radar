@@ -308,7 +308,7 @@ async def chat(chat_request: ChatRequest, request: Request) -> ChatResponse:
             raise HTTPException(status_code=400, detail="Invalid chat request") from exc
         
         prompt = data.prompt
-        thread_id = data.thread_id
+        thread_id = (data.thread_id or "").strip() or str(uuid4())
  
     if "multipart/form-data" in content_type:
         history = _parse_messages(raw_messages)
