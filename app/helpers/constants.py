@@ -12,19 +12,19 @@ EMP_TYPES = (
 
 JOBTECH_SEARCH_URL = "https://jobsearch.api.jobtechdev.se/search"
 JOBTECH_SEARCH_AD = "https://jobsearch.api.jobtechdev.se/ad/"
-JOBTECH_REQUEST_LIMIT=10
-JOBTECH_REQUEST_TIMEOUT=20
+JOBTECH_REQUEST_LIMIT=30
+JOBTECH_REQUEST_TIMEOUT=10
 JOBTECH_REQUEST_HEADER = { "accept": "application/json" }
 JOBTECH_REQUEST_SORTING = "relevance"
 JOBTECH_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 EMPLOYMENT_TYPE_QUERIES = {
-    "Thesis": ["master thesis", "exjobb", "examensarbete"],
+    "Full-time": [],
+    "Thesis": ["master thesis", "exjobb"],
     "Internship": ["intern", "praktik"],
     "PhD": ["phd", "doktorand"],
-    "Part-time":  ["part time", "deltid"],
-    "Contract":   ["contract", "fixed-term", "visstidsanställning"],
-    "Full-time": []
+    "Part-time":  ["part time"],
+    "Contract":   ["contract"]
 }
 
 MAX_TARGET_ROLES_ALLOWED=5

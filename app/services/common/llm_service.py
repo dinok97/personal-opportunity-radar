@@ -72,7 +72,7 @@ def get_generated_result(model: Type[T],
                          retries: int = MAX_NUM_RETRIES) -> Type[T] | None:    
     
     llm_client = get_groq(llm=llm, max_tokens=max_tokens, reasoning_effort=reasoning_effort)
-    structured_llm = llm_client.with_structured_output(model)
+    structured_llm = llm_client.with_structured_output(model, method="json_schema")
 
     for attempt in range(retries + 1):
         try:

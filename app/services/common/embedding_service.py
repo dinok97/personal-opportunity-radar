@@ -26,6 +26,6 @@ class EmbeddingService():
                 "trust_remote_code": True, 
                 "model_kwargs": {"default_task": "retrieval"}
             },
-            encode_kwargs={"normalize_embeddings": True, "prompt_name": "document"},
-            query_encode_kwargs={"normalize_embeddings": True, "prompt_name": "query"}
+            encode_kwargs={"task": "retrieval", "normalize_embeddings": True, "prompt_name": "document"},
+            query_encode_kwargs={ "task": "retrieval", "normalize_embeddings": True, "prompt_name": "query"}
         )

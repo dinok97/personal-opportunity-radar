@@ -16,6 +16,7 @@ class Term(BaseModel):
         description="Full canonical field name in title case, e.g. 'Machine Learning'. "
                     "Never include the abbreviation here.")
     abbreviation: Optional[str] = Field(
+        default=None,
         description='Standard abbreviation of the WHOLE name as job postings write it, e.g. '
                     '"ML" for Machine Learning, "NLP", "LLMs", "AI" for Artificial Intelligence. '
                     'Use null if the field has no standard abbreviation, if the name is already an '
