@@ -283,42 +283,43 @@ async def chat2(request: Request) -> ChatResponse:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(chat_request: ChatRequest, request: Request) -> ChatResponse:
+async def chat(request: Request) -> ChatResponse:
     content_type = request.headers.get("content-type", "")
     prompt = ""
     raw_messages: str | None = None
     file: UploadFile | None = None
+    history: list[ChatMessage] = []
+    thread_id = ""
  
     if "multipart/form-data" in content_type:
         form = await request.form()
+        thread_id = str(form.get("thread_id") or "").strip() or str(uuid4())
         prompt = str(form.get("prompt") or "")
         raw_messages = str(form.get("messages")) if form.get("messages") else None
         form_file = form.get("file")
         if isinstance(form_file, UploadFile) or hasattr(form_file, "read"):
             file = form_file
+        history = _parse_messages(raw_messages)
     else:
         try:
             body = await request.json()
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
         try:
-            #data = ChatRequest.model_validate(await request.json())
-            data = chat_request
+            data = ChatRequest.model_validate(body)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail="Invalid chat request") from exc
         
         prompt = data.prompt
+        history = data.messages
         thread_id = (data.thread_id or "").strip() or str(uuid4())
- 
-    if "multipart/form-data" in content_type:
-        history = _parse_messages(raw_messages)
  
     clean_prompt = (prompt or "").strip()
     if not clean_prompt and not history and file is None:
         raise HTTPException(status_code=400, detail="prompt, messages, or a PDF file is required")
  
     if file is not None:
-        return await handle_file(file, clean_prompt, history)
+        return await handle_file(file, clean_prompt, history, thread_id)
     else:
         return await handle_chat(clean_prompt, thread_id)
  
@@ -327,6 +328,7 @@ async def handle_file(
     file: UploadFile,
     clean_prompt: str,
     history: list[ChatMessage],
+    thread_id: str,
 ) -> ChatResponse:
     pdf_upload = await _read_pdf(file)
     file_name = pdf_upload[0] if pdf_upload else None
@@ -473,7 +475,7 @@ async def handle_file(
     print("profile", user_profile)
  
     return ChatResponse(
-        thread_id="",
+        thread_id=thread_id,
         message=message,
         jobs=jobs,
         source=source,

@@ -172,7 +172,7 @@ def test_demo_chat_returns_frontend_contract(monkeypatch) -> None:
 
     response = client.post(
         "/api/chat",
-        json={"prompt": "Find me remote ML jobs", "messages": []},
+        json={"thread_id": "test-thread", "prompt": "Find me remote ML jobs", "messages": []},
     )
 
     assert response.status_code == 200
@@ -191,7 +191,7 @@ def test_openrouter_chat_uses_selected_provider(monkeypatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(OpenRouterClient, "complete", complete)
 
-    response = client.post("/api/chat", json={"prompt": "Find AI roles"})
+    response = client.post("/api/chat", json={"thread_id": "test-thread", "prompt": "Find AI roles"})
 
     assert response.status_code == 200
     assert response.json()["message"] == "OpenRouter response"
@@ -206,7 +206,7 @@ def test_ollama_chat_works_without_openrouter_key(monkeypatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
     monkeypatch.setattr(OllamaClient, "complete", complete)
 
-    response = client.post("/api/chat", json={"prompt": "Find AI roles"})
+    response = client.post("/api/chat", json={"thread_id": "test-thread", "prompt": "Find AI roles"})
 
     assert response.status_code == 200
     assert response.json()["message"] == "Ollama response"
@@ -263,7 +263,7 @@ def test_ollama_failure_returns_bad_gateway(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setattr(OllamaClient, "complete", fail)
 
-    response = client.post("/api/chat", json={"prompt": "Find AI roles"})
+    response = client.post("/api/chat", json={"thread_id": "test-thread", "prompt": "Find AI roles"})
 
     assert response.status_code == 502
     assert response.json()["detail"] == "The AI provider is unavailable"
@@ -315,7 +315,10 @@ def test_invalid_cv_vector_settings_are_rejected(settings_kwargs) -> None:
 
 
 def test_empty_chat_request_is_rejected() -> None:
-    response = client.post("/api/chat", json={"prompt": "", "messages": []})
+    response = client.post(
+        "/api/chat",
+        json={"thread_id": "test-thread", "prompt": "", "messages": []},
+    )
 
     assert response.status_code == 400
     assert response.json()["detail"] == "prompt, messages, or a PDF file is required"
@@ -337,18 +340,19 @@ def test_pdf_upload_is_extracted_persisted_and_returns_document_id(monkeypatch) 
 
     response = client.post(
         "/api/chat",
-        data={"prompt": "Review this CV"},
-        files={"file": ("resume.pdf", b"pdf bytes", "application/pdf")},
+        data={"thread_id": "test-thread", "prompt": "Review this CV"},
+        files={"file": ("resume.pdf", b"%PDF-\xb5", "application/pdf")},
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["file_name"] == "resume.pdf"
+    assert payload["thread_id"] == "test-thread"
     assert payload["cv_uploaded"] is True
     assert payload["document_id"] == captured["document_id"]
     assert payload["user_profile"]["full_name"] == "Ada Example"
     assert payload["message"].startswith("I received resume.pdf.")
-    assert captured["pdf_content"] == b"pdf bytes"
+    assert captured["pdf_content"] == b"%PDF-\xb5"
     assert captured["cv_text"] == "Extracted CV text"
     assert captured["profile"].full_name == "Ada Example"
     assert captured["chunks"][0].metadata["document_id"] == payload["document_id"]
@@ -463,7 +467,7 @@ def test_chat_retrieves_existing_cv_without_new_upload(monkeypatch) -> None:
 
     response = client.post(
         "/api/chat",
-        json={"prompt": "What experience do I have in NLP?"},
+        json={"thread_id": "test-thread", "prompt": "What experience do I have in NLP?"},
     )
 
     assert response.status_code == 200

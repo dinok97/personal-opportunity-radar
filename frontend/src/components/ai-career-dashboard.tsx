@@ -146,6 +146,7 @@ export function AICareerDashboard() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const messageIdRef = useRef(0);
+  const threadIdRef = useRef<string | null>(null);
 
   const nextMessageId = (role: ChatMessage["role"]) => {
     messageIdRef.current += 1;
@@ -229,6 +230,9 @@ export function AICareerDashboard() {
     const fileToSend = selectedFile;
     if (!cleanPrompt && !fileToSend) return;
 
+    const threadId = threadIdRef.current ?? crypto.randomUUID();
+    threadIdRef.current = threadId;
+
     if (fileToSend && !validatePdfFile(fileToSend)) {
       return;
     }
@@ -255,6 +259,7 @@ export function AICareerDashboard() {
 
       if (fileToSend) {
         const formData = new FormData();
+        formData.append("thread_id", threadId);
         formData.append("prompt", cleanPrompt || "Review my uploaded CV and suggest relevant opportunities.");
         formData.append("messages", JSON.stringify(requestMessages));
         formData.append("file", fileToSend);
@@ -270,6 +275,7 @@ export function AICareerDashboard() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            thread_id: threadId,
             prompt: cleanPrompt,
             messages: requestMessages,
           }),
