@@ -6,8 +6,7 @@ from ..generation.llm_service import get_groq
 from ..helpers.agent_util import clean_text
 from ..prompts import (
     FINAL_PROMPT,
-    EMPTY_REPLY,
-    NO_CV_REPLY
+    EMPTY_REPLY
 )
 
 FINAL_NODE_TEMP = 0.1
@@ -22,9 +21,7 @@ def finish_node(state: FlowStep) -> dict:
     results = state.get("results", [])
     reply = (state.get("direct_ans") or "").strip()
 
-    prompt = FINAL_PROMPT.format(
-        NO_CV_REPLY=NO_CV_REPLY
-    )
+    prompt = FINAL_PROMPT
 
     if not reply:
         outputs = [r["output"] for r in results]

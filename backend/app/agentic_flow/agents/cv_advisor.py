@@ -1,4 +1,4 @@
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain.agents import create_agent
 from langgraph.errors import GraphRecursionError
 
@@ -11,9 +11,11 @@ from ..prompts import (
     ONE_JOB_REPLY
 )
 
-CV_ADVISOR_TEMP = 0.1
+CV_ADVISOR_TEMP = 0.2
 CV_ADVISOR_MAX_TOKENS = 800
 FORCE_TOOL_CALL_CONTEXT = "Call get_user_profile first, then answer."
+CV_QUERY_FULL = "skills, experience, education and projects"
+MAX_TOOL_RETRIES = 2
 
 
 llm = get_groq(temp=CV_ADVISOR_TEMP, max_tokens=CV_ADVISOR_MAX_TOKENS)
@@ -30,23 +32,30 @@ cv_advisor_agent = create_agent(
 
 def cv_advisor_node(state: FlowStep) -> dict:
     step, *rest = state["plans"]
-
     content = task_with_context(step, state)
 
     try:
-        out = cv_advisor_agent.invoke(
-            {"messages": [HumanMessage(content=content)]},
-        )
+        out = cv_advisor_agent.invoke({"messages": [HumanMessage(content=content)]})
 
-        if not called_a_tool(out):
-                out = cv_advisor_agent.invoke({"messages": [HumanMessage(
-                    content=f"{content}\n\n{FORCE_TOOL_CALL_CONTEXT}"
-                )]})
+        retries = 0
+        
+        while not called_a_tool(out) and retries < MAX_TOOL_RETRIES:
+            retries += 1
+            
+            print(f"cv advisor skipped the tool, retry {retries}/{MAX_TOOL_RETRIES}")
 
-        output = get_last_ai_text(out["messages"]) or "The CV advisor did not produce an answer."
+            out = cv_advisor_agent.invoke({"messages": [HumanMessage(
+                content=f"{content}\n\n{FORCE_TOOL_CALL_CONTEXT}"
+            )]})
+
+        if called_a_tool(out):
+            output = get_last_ai_text(out["messages"]) or "The CV analysis did not produce an answer."
+        else:
+            output = "The CV analysis could not be completed."
     except GraphRecursionError:
         output = "The CV analysis took too many steps. Try a narrower question."
-    except Exception:
+    except Exception as e:
+        print(f"cv advisor failed for task {step.task!r}: {e!r}")
         output = "The CV analysis could not be completed."
 
 

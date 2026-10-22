@@ -16,7 +16,8 @@ from ..prompts import (
     INVALID_REPLY,
     NO_CV_REPLY,
     OUTSIDE_SWEDEN_REPLY,
-    GENERIC_REPLY
+    GENERIC_REPLY,
+    NON_ENGLISH_REPLY
 )
 
 
@@ -42,7 +43,8 @@ def supervisor_node(state: FlowStep):
         OFF_TOPIC_REPLY=OFF_TOPIC_REPLY,
         NO_CV_REPLY=NO_CV_REPLY,
         OUTSIDE_SWEDEN_REPLY=OUTSIDE_SWEDEN_REPLY,
-        GENERIC_REPLY=GENERIC_REPLY
+        GENERIC_REPLY=GENERIC_REPLY,
+        NON_ENGLISH_REPLY=NON_ENGLISH_REPLY
     )
     system = supervisor_prompt + load_profile_summary() + jobs_block(state.get('latest_searched_jobs') or [])
 
