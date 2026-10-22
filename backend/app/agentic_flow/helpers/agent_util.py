@@ -67,3 +67,7 @@ def jobs_block(jobs: list) -> str:
         places = ", ".join(job.locations) if isinstance(job.locations, list) else (job.locations or "")
         lines.append(f"[{job.external_id}] {job.title} | {job.company} | {places}")
     return "\n\nJobs shown (from your previous reply):\n" + ("\n".join(lines) if lines else "none")
+
+
+def called_a_tool(out) -> bool:
+    return any(m.type == "tool" for m in out["messages"])

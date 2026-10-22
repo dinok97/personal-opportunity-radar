@@ -16,12 +16,12 @@ def _load_embedding_model(model_name: str, model_revision: str):
         model_name=model_name,
         model_kwargs={
             "revision": model_revision,
-            "trust_remote_code": True,
-            "model_kwargs": {"default_task": "retrieval"},
+            "trust_remote_code": True
         },
         encode_kwargs={
             "task": "retrieval",
             "prompt_name": "document",
+            "normalize_embeddings": True,
             "convert_to_numpy": True,
         },
         query_encode_kwargs={

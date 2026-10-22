@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 45.0
     ollama_model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434/v1"
-    embedding_model: str = "jinaai/jina-embeddings-v5-text-nano"
-    embedding_model_revision: str = "8a7f00a"
+    embedding_model: str = "jinaai/jina-embeddings-v5-text-nano-retrieval"
+    embedding_model_revision: str = "main"
     pgvector_connection_string: str | None = Field(default=None, min_length=1)
     pgvector_collection_name: str = Field(
         default="cv_chunks", pattern=r"^[a-z_][a-z0-9_]*$"

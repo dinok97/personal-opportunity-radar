@@ -6,7 +6,8 @@ from ..generation.llm_service import get_groq
 from ..helpers.agent_util import clean_text
 from ..prompts import (
     FINAL_PROMPT,
-    EMPTY_REPLY
+    EMPTY_REPLY,
+    NO_CV_REPLY
 )
 
 FINAL_NODE_TEMP = 0.1
@@ -21,13 +22,17 @@ def finish_node(state: FlowStep) -> dict:
     results = state.get("results", [])
     reply = (state.get("direct_ans") or "").strip()
 
+    prompt = FINAL_PROMPT.format(
+        NO_CV_REPLY=NO_CV_REPLY
+    )
+
     if not reply:
         outputs = [r["output"] for r in results]
         question = next((m.content for m in reversed(state["messages"]) if m.type == "human"), "")
 
         try:
             body = "\n\n".join(f"[{r['agent']}] {r['output']}" for r in results)
-            msg = llm.invoke([SystemMessage(content=FINAL_PROMPT),
+            msg = llm.invoke([SystemMessage(content=prompt),
                               HumanMessage(content=f"Question: {question}\n\nResults:\n{body}")])
             reply = clean_text(msg.content)
         except Exception:

@@ -7,6 +7,7 @@ from ..services.job_service import get_job_service, JobSearchResult
 from typing import Any
 
 MAX_SEARCHES = 3
+MIN_RERANK_SCORE = -2.0 
 
 def get_job_search_plan(request: str, retry_attempts: int = 2) -> list[SearchPlan]:
     fallback = [SearchPlan(query=request)]
@@ -34,6 +35,8 @@ def get_job_search_plan(request: str, retry_attempts: int = 2) -> list[SearchPla
 def retrieve_jobs(request: str, top_n_limit=10) -> list[JobSearchResult]:
     plans = get_job_search_plan(request=request)
 
+    print(f"Query plans: {plans}")
+
     all_jobs: dict[Any, JobSearchResult] = {}
 
     for plan in plans:
@@ -57,4 +60,8 @@ def retrieve_jobs(request: str, top_n_limit=10) -> list[JobSearchResult]:
             if key not in all_jobs:     
                 all_jobs[key] = j
 
-    return get_job_service().rerank_jobs(query=request, jobs=list(all_jobs.values()), top_k=top_n_limit)
+    found_jobs = get_job_service().rerank_jobs(query=request, jobs=list(all_jobs.values()), top_k=top_n_limit)
+
+    jobs_cutoff = [jb for jb in found_jobs if jb.score >= MIN_RERANK_SCORE]
+
+    return jobs_cutoff[:top_n_limit]

@@ -4,7 +4,7 @@ from langgraph.errors import GraphRecursionError
 
 from ..state import FlowStep
 from ..generation.llm_service import get_groq
-from ..helpers.agent_util import get_last_ai_text
+from ..helpers.agent_util import get_last_ai_text, called_a_tool
 from ..tools import get_job_details, search_jobs
 from ...models.job import JobSearchResult, Job
 from ..prompts import (
@@ -17,7 +17,7 @@ from ..prompts import (
 
 JOB_ADVISOR_TEMP = 0.1
 JOB_ADVISOR_MAX_TOKENS = 800
-
+FORCE_TOOL_CALL_CONTEXT = "Call search_jobs or get_job_details first, then answer."
 
 llm = get_groq(temp=JOB_ADVISOR_TEMP, max_tokens=JOB_ADVISOR_MAX_TOKENS)
 
@@ -44,6 +44,12 @@ def job_advisor_node(state: FlowStep) -> dict:
         out = job_advisor_agent.invoke(
             {"messages": [HumanMessage(content=content)]}
         )
+
+        if not called_a_tool(out):
+            out = job_advisor_agent.invoke({"messages": [HumanMessage(
+                content=f"{content}\n\n{FORCE_TOOL_CALL_CONTEXT}"
+            )]})
+
     except GraphRecursionError:
             output = "The job analysis took too many steps. Try a narrower question."
     except Exception:
