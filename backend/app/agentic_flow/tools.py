@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 
 from ..services.job_service import get_job_service
 from ..models.job import JobSearchResult
@@ -9,8 +9,13 @@ from .helpers.agent_util import deadline_text
 from .helpers.agent_constants import MAX_JOB_IDS_HANDLE
 
 
+EmploymentType = Literal["Thesis", "PhD", "Full-time", "Part-time", "Internship", "Contract"]
+
+
 @tool(response_format="content_and_artifact")
 def search_jobs(queries: list[str],
+                employment_types: Optional[list[EmploymentType]] = None,
+                locations: Optional[list[str]] = None,
                 posted_before_days: Optional[int] = None,
                 posted_after_days: Optional[int] = None,
                 posted_on_days: Optional[int] = None,
@@ -21,6 +26,11 @@ def search_jobs(queries: list[str],
     plain-language query per separate need (a different city, employment type, company or
     field), for example ["Thesis computer vision Linköping", "Internship data engineering Gothenburg"].
     Don't send several rewordings of the same need.
+    Filters are optional and apply to ALL queries in the call, so set one only when it is the same
+    for every query. When the needs differ (different cities or types), leave the filter empty and
+    keep the place and type in each query.
+    employment_types: set only when the task names a type (Thesis, PhD, Full-time, Internship, Contract, Part-time).
+    locations: city or municipality names the task names, in their Swedish spelling (Göteborg, not Gothenburg), e.g. ["Stockholm"]. Not regions.
     Date limits are optional whole numbers of days (0 or more). Leave them empty when the task gives no date limit.
     Posting date, counted in days ago: posted_on_days = posted exactly N days ago;
     posted_after_days = posted in the last N days; posted_before_days = posted N or more days ago.
@@ -31,12 +41,6 @@ def search_jobs(queries: list[str],
     The matching jobs are shown to the user automatically as cards; you only get a short
     summary, so don't list jobs in your reply."""
 
-    limits = {
-        "posted on": posted_on_days, "posted after": posted_after_days, "posted before": posted_before_days,
-        "deadline on": deadline_on_days, "deadline after": deadline_after_days, "deadline before": deadline_before_days,
-    }
-    limits_text = ", ".join(f"{name} {n} days" for name, n in limits.items() if n is not None)
-
     print("From search_jobs tool:\n\n")
 
     cards: dict[Any, JobSearchResult] = {}
@@ -46,6 +50,8 @@ def search_jobs(queries: list[str],
         for q in queries:
             jobs: list[JobSearchResult] = get_job_service().search_jobs(
                 q,
+                employment_types=employment_types,
+                locations=locations,
                 posted_before_days=posted_before_days,
                 posted_after_days=posted_after_days,
                 posted_on_days=posted_on_days,
@@ -61,10 +67,8 @@ def search_jobs(queries: list[str],
         print("search_jobs failed for queries: %s", queries)
         return "Search failed.", []
 
-    if limits_text:
-        summaries.append(f"Date limits applied: {limits_text}.")
-
     return "\n".join(summaries), list(cards.values())
+
 
 @tool
 def get_job_details(job_ids: list[str]) -> str:

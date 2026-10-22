@@ -1,5 +1,5 @@
 from collections.abc import Callable, Mapping
-from typing import Optional
+from typing import Optional, Literal
 
 from langchain_core.documents import Document
 from langchain_postgres import PGVectorStore
@@ -11,6 +11,7 @@ from .database import Database
 from ..helpers.constants import *
 from ..helpers.utils import date_conditions
 
+EmploymentType = Literal["Thesis", "PhD", "Full-time", "Part-time", "Internship", "Contract"]
 
 class JobRepository:
     table_name = JOBS_TABLE
@@ -79,6 +80,8 @@ class JobRepository:
             self,
             query: str,
             k: int,
+            employment_types: Optional[list[EmploymentType]] = None,
+            locations: Optional[list[str]] = None,
             posted_before_days: Optional[int] = None,
             posted_after_days: Optional[int] = None,
             posted_on_days: Optional[int] = None,
@@ -86,11 +89,28 @@ class JobRepository:
             deadline_after_days: Optional[int] = None,
             deadline_on_days: Optional[int] = None,
         ) -> list[tuple[Document, float]]:
+            
             conditions = [
                 {"is_active": {"$eq": True}},
                 {"is_deleted": {"$eq": False}},
                 *date_conditions(JOBS_TABLE_POSTED_AT, -1, posted_before_days, posted_after_days, posted_on_days),
                 *date_conditions(JOBS_TABLE_APPLICATION_DEADLINE_AT, +1, deadline_before_days, deadline_after_days, deadline_on_days)
             ]
+
+            if employment_types:
+                conditions.append({JOBS_TABLE_EMPLOYMENT_TYPE: {"$in": employment_types}})
+
+            if locations:
+                conditions.append({
+                    "$or": [
+                        {JOBS_TABLE_LOCATIONS: {"$ilike": f"%{loc}%"}} for loc in locations
+                    ]
+                })
+
+            valid_conditions = [c for c in conditions if c]
+
+            filter_dict = {"$and": valid_conditions} if len(valid_conditions) > 1 else valid_conditions[0] if valid_conditions else None
+
+            print("Final Filter Dict:", filter_dict)
         
-            return self.store.similarity_search_with_score(query=query, k=k, filter={"$and": conditions})
+            return self.store.similarity_search_with_score(query=query, k=k, filter=filter_dict)
