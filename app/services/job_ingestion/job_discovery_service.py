@@ -9,6 +9,7 @@ from dto.job_search_params import JobSearchParams
 from helpers.constants import JOBTECH_REQUEST_LIMIT
 from helpers.utils import format_datetime, clean_text, parse_datetime_isoformat, get_datetime_local
 from helpers.job_utils import TITLE_RULES, DESC_SPECIFIC, DESC_GENERIC
+from services.common.translator_service import detect_if_swedish, translate_to_english
 
 from datetime import datetime
 from typing import Optional, Any
@@ -119,6 +120,20 @@ def fetch_jobs(query: str,
     return all_ads
 
 
+def cleanup_job_ads(ads: list[JobAd]) -> list[JobAd]:
+    for ad in ads:
+
+        if detect_if_swedish(ad.title):
+            print(f"Swedish detected for title, job id: {ad.id}")
+            ad.title = translate_to_english(ad.title)
+
+        if detect_if_swedish(ad.description):
+            print(f"Swedish detected for description, job id: {ad.id}")
+            ad.description = translate_to_english(ad.description)
+
+    return ads
+
+
 def search_jobs_by_queries(job_search_request: JobSearchParams) -> list[JobAd]:
     queries = job_search_request.query_plans.queries
     emp_type = job_search_request.query_plans.emp_type
@@ -133,7 +148,11 @@ def search_jobs_by_queries(job_search_request: JobSearchParams) -> list[JobAd]:
         all_ads.extend(job_ads)
             
     jobs = list({job.id: job for job in all_ads}.values())
-    
-    print(f"Finally kept total {len(jobs)} kept")
 
-    return jobs
+    print(f"Finally found total {len(jobs)}")
+
+    clean_jobs = cleanup_job_ads(jobs)
+    
+    print(f"Finally kept total {len(clean_jobs)}")
+
+    return clean_jobs
