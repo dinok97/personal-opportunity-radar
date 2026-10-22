@@ -21,6 +21,7 @@ type BackendJobSearchResult = {
     title: string;
     company: string;
     source: string;
+    application_deadline_at: string | null;
     locations: string;
     employment_type: string | null;
     skills: string;
@@ -38,6 +39,7 @@ type DashboardJob = {
   location: string | null;
   type: string | null;
   salary: string | null;
+  applicationDeadline: string | null;
   matchScore: number | null;
   // relevanceScore: number | null;
   description: string;
@@ -65,6 +67,21 @@ type ChatApiResponse = {
 const PROFILE_DOCUMENT_KEY = "opportunity-radar-profile-document-id";
 const PROFILE_DOCUMENT_EVENT = "profile-document-updated";
 
+function formatApplicationDeadline(deadline: string | null) {
+  if (!deadline) return "Not listed";
+
+  const datePart = deadline.slice(0, 10);
+  const date = new Date(`${datePart}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return deadline;
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 function toDashboardJob(result: BackendJobSearchResult | JobMatch): DashboardJob {
   if ("job" in result) {
     const job = result.job;
@@ -76,6 +93,7 @@ function toDashboardJob(result: BackendJobSearchResult | JobMatch): DashboardJob
       location: job.locations || null,
       type: job.employment_type,
       salary: null,
+      applicationDeadline: job.application_deadline_at,
       matchScore: null,
       // relevanceScore: result.score,
       description: job.executive_summary || job.embedding_text,
@@ -94,6 +112,7 @@ function toDashboardJob(result: BackendJobSearchResult | JobMatch): DashboardJob
     location: result.location,
     type: result.type,
     salary: result.salary,
+    applicationDeadline: null,
     matchScore: result.matchScore,
     // relevanceScore: null,
     description: result.description,
@@ -201,6 +220,11 @@ export function AICareerDashboard() {
   const welcomeMessage = profileStatus === "empty"
     ? "Hi! Upload your CV to build your profile and find relevant opportunities, or ask me about roles you have in mind."
     : `Hi, ${currentProfile?.full_name || "there"}! What kind of opportunities are you looking for?`;
+  // const quickPrompts = [
+  //   `Find me remote ${currentProfile?.professional_field || "ML"} jobs`,
+  //   `Show AI internships in ${currentProfile?.location || "your area"}`,
+  // ];
+  // const hasJobResults = messages.some((message) => Boolean(message.jobs?.length));
 
   const validatePdfFile = (file: File | null) => {
     if (!file) return true;
@@ -327,12 +351,6 @@ export function AICareerDashboard() {
       setIsLoading(false);
     }
   }
-
-  const quickPrompts = [
-    `Find me remote ${currentProfile?.professional_field || "ML"} jobs`,
-    `Show AI internships in ${currentProfile?.location || "your area"}`,
-  ];
-  const hasJobResults = messages.some((message) => Boolean(message.jobs?.length));
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] text-[#111827]">
@@ -533,6 +551,7 @@ export function AICareerDashboard() {
                               {job.location && <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.location}</span>}
                               {job.type && <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.type}</span>}
                               {job.salary && <span className="rounded-full border border-[#e5e7eb] px-2 py-1">{job.salary}</span>}
+                              <span className="rounded-full border border-[#e5e7eb] px-2 py-1">Deadline: {formatApplicationDeadline(job.applicationDeadline)}</span>
                             </div>
                           </button>
                         ))}
@@ -544,10 +563,14 @@ export function AICareerDashboard() {
 
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-sm text-slate-500">
+                  <div className="flex items-center gap-2 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-sm text-slate-500" role="status">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0 animate-spin text-blue-600" fill="none">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
                     {isUploadingCv
-                      ? "Uploading your CV and searching opportunities..."
-                      : "Searching opportunities and comparing them with your profile..."}
+                      ? "Uploading and processing your CV..."
+                      : "Processing your message..."}
                   </div>
                 </div>
               )}
@@ -556,6 +579,7 @@ export function AICareerDashboard() {
 
           <div className={`${activeTab === "dashboard" ? "" : "hidden"} border-t border-[#f1f5f9] bg-white px-4 py-4 md:px-6`}>
             <div className="mx-auto max-w-3xl">
+              {/*
               {!hasJobResults && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {quickPrompts.map((prompt) => (
@@ -569,7 +593,7 @@ export function AICareerDashboard() {
                   ))}
                 </div>
               )}
-
+              */}
               {selectedFile && (
                 <div className="mb-2 flex items-center justify-between rounded-xl border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-xs text-slate-600">
                   <span className="truncate">{selectedFile.name}</span>
@@ -602,8 +626,9 @@ export function AICareerDashboard() {
 
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-slate-600 transition hover:border-[#d1d5db] hover:text-slate-800"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-slate-600 transition hover:border-[#d1d5db] hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Upload PDF"
                 >
                   <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
@@ -615,7 +640,7 @@ export function AICareerDashboard() {
 
                 <textarea
                   value={draft}
-                  disabled={Boolean(selectedFile)}
+                  disabled={Boolean(selectedFile) || isLoading}
                   onChange={(event) => setDraft(event.target.value)}
                   rows={1}
                   placeholder="Ask for jobs, internships, or fit analysis..."
@@ -629,8 +654,9 @@ export function AICareerDashboard() {
                 />
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={() => void sendPrompt()}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#111827] text-white transition hover:bg-[#1f2937]"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#111827] text-white transition hover:bg-[#1f2937] disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Send message"
                 >
                   <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -672,6 +698,11 @@ export function AICareerDashboard() {
                 )}
               </div>
 
+              <div className="mt-5 border-b border-[#e5e7eb] pb-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Application deadline</p>
+                <p className="mt-1 text-sm font-medium text-slate-700">{formatApplicationDeadline(selectedJob.applicationDeadline)}</p>
+              </div>
+
               {selectedJob.reasons.length > 0 ? (
                 <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Why it matches</p>
@@ -685,7 +716,7 @@ export function AICareerDashboard() {
                   </ul>
                 </div>
               ) : selectedJob.description ? (
-                <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+                <div className="mt-6 max-h-100 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Role summary</p>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{selectedJob.description}</p>
                 </div>
