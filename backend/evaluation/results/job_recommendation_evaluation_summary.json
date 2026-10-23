@@ -1,0 +1,24 @@
+{
+  "number_of_jobs_evaluated": 5,
+  "human_relevance_rubric": {
+    "0": "Low relevance / major mismatch with essential requirements",
+    "1": "Partial relevance / some overlap but important gaps",
+    "2": "High potential relevance / strong overlap and no clearly evidenced disqualifying requirement"
+  },
+  "human_relevance_score_sum": 6.0,
+  "average_human_relevance_score_out_of_2": 1.2,
+  "normalized_human_relevance_percent": 60.0,
+  "score_counts": {
+    "0": 1,
+    "1": 2,
+    "2": 2
+  },
+  "explanation_quality_evaluated": false,
+  "explanation_quality_note": "Generated explanations were not provided, so explanation faithfulness/correctness could not be evaluated.",
+  "system_score_note": "The uploaded CSV contains positive values for the system relevance score, while earlier chat messages showed negative values for some jobs. The uploaded CSV values were preserved as supplied; verify score signs and the score scale against the application before analysis.",
+  "limitations": [
+    "Human scores are preliminary judgments based on the CV information and job descriptions shared in chat.",
+    "Full CV and complete job postings should be checked before treating labels as ground truth.",
+    "Five jobs are a small sample and are not sufficient for broad performance claims."
+  ]
+}

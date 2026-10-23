@@ -1,0 +1,10 @@
+{
+  "number_of_jobs": 5,
+  "system_score_direction_assumption": "Higher raw CrossEncoder score indicates stronger query-job relevance, based on the configured cross-encoder/ms-marco-MiniLM-L6-v2 model and code path; scores are not probabilities.",
+  "spearman_rank_correlation": 0.1054,
+  "spearman_p_value": 0.866,
+  "kendall_tau": 0.0,
+  "kendall_p_value": 1.0,
+  "interpretation": "Exploratory only: only five jobs were evaluated, and human relevance labels are preliminary. Correlation is sensitive to this tiny sample and must not be reported as robust system performance.",
+  "important_limitation": "Generated explanations were not provided, so explanation correctness/faithfulness was not evaluated."
+}

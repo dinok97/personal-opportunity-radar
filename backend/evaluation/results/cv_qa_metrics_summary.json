@@ -1,0 +1,17 @@
+{
+  "number_of_questions": 10,
+  "input_csv": "F:\\SU\\Samin_project\\personal-opportunity-radar\\backend\\evaluation\\data\\cv_related_QA.csv",
+  "scoring_csv": "F:\\SU\\Samin_project\\personal-opportunity-radar\\backend\\evaluation\\results\\cv_qa_scoring.csv",
+  "correctness_metrics_status": "complete",
+  "claim_metrics_status": "complete",
+  "hallucination_metrics_status": "complete",
+  "correctness_score_sum": 11.0,
+  "average_correctness_out_of_2": 1.1,
+  "normalized_correctness_percent": 55.0,
+  "supported_claims": 89,
+  "total_factual_claims": 102,
+  "claim_level_faithfulness_percent": 87.25,
+  "answers_with_unsupported_claims": 7,
+  "answer_level_hallucination_rate_percent": 70.0,
+  "note": "Metrics are calculated from manually entered evaluation labels. They are not final until the labels and claim counts have been verified against the CV."
+}

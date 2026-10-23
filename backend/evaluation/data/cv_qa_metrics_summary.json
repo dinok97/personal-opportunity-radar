@@ -1,0 +1,13 @@
+{
+  "dataset": "CV question-answering evaluation",
+  "number_of_questions": 10,
+  "correctness_score_sum": 11.0,
+  "average_correctness_out_of_2": 1.1,
+  "normalized_correctness_percent": 55.0,
+  "supported_claims": 89,
+  "total_factual_claims": 102,
+  "claim_level_faithfulness_percent": 87.25,
+  "answers_with_unsupported_claims": 7,
+  "answer_level_hallucination_rate_percent": 70.0,
+  "status": "Preliminary manual annotations; verify claim-level counts before using as final research results."
+}

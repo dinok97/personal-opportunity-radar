@@ -1,0 +1,28 @@
+{
+  "explanation_evaluated": "Generated multi-job comparison for Legora, A Hub, Etraveli, and Sveaviken PM",
+  "number_of_claims_reviewed": 19,
+  "label_counts": {
+    "Supported": 6,
+    "Partially supported": 3,
+    "Supported by job description": 2,
+    "Unverified / unsupported by available CV evidence": 2,
+    "Inference / partially supported": 1,
+    "Supported as a gap assessment": 1,
+    "Supported in broad terms": 1,
+    "Unverified / overgeneralized": 1,
+    "Partially supported / evaluative": 1,
+    "Partially supported / questionable ranking": 1
+  },
+  "evaluation_method": "Manual claim-level review against the candidate CV information and job descriptions shared in the conversation.",
+  "key_findings": [
+    "The explanation correctly identifies several relevant AI/LLM projects and some job-specific gaps.",
+    "Prompt engineering, workflow understanding, and AI agent/automation experience are not explicitly established by the available CV evidence.",
+    "The conclusion names Sveaviken PM as a best fit but omits the job's explicit fluent Swedish requirement, while the CV lists Swedish as beginner.",
+    "The explanation's client-facing communication and product feedback claims are partly inferential."
+  ],
+  "limitations": [
+    "These are preliminary manual labels, not independently annotated ground truth.",
+    "The full CV document was not re-reviewed claim by claim in this step; assessment uses the CV details available in the conversation.",
+    "Labels such as partially supported and unverified are qualitative; do not treat a simple supported-claim percentage as a definitive model metric."
+  ]
+}

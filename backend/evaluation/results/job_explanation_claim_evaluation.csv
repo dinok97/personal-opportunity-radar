@@ -1,0 +1,20 @@
+﻿Claim_ID,Role_or_Section,Generated_Claim,Evidence_Label,Rationale
+C01,General,The candidate has experience building LLM-based solutions.,Supported,CV lists an Adaptive Memory Research Assistant RAG project and LLM-related work.
+C02,Legora,The candidate has strong communication skills.,Partially supported,"Teaching Assistant experience supports communication/training potential, but 'strong' is an evaluative claim and no direct evidence of client-facing communication is established."
+C03,Legora,The role requires client onboarding and training.,Supported by job description,"The supplied Legora description includes client onboarding, demos, training, and user feedback."
+C04,Legora,The role requires exposure to law.,Supported by job description,The supplied description asks for an LLB or equivalent and some legal work experience.
+C05,Legora,The candidate's NLP/AI background can help configure standard use cases and capture user insights.,Inference / partially supported,"AI/NLP background is supported, but experience configuring client use cases or capturing product feedback is not directly evidenced."
+C06,A Hub,The candidate has skills in LLMs.,Supported,CV lists LLM-related work and an RAG project.
+C07,A Hub,The candidate has prompt engineering experience.,Unverified / unsupported by available CV evidence,The CV summary available here does not explicitly establish prompt engineering experience.
+C08,A Hub,The candidate has experience developing AI tools and understanding workflows.,Partially supported,"AI projects are listed, but workflow/product ownership experience is not directly established."
+C09,A Hub,Dialect standardization and sentiment classification projects are part of the candidate's project experience.,Supported,CV lists BanglaDialecto and Movie Review Sentiment Classification.
+C10,Etraveli,The candidate has experience with LLMs.,Supported,CV includes LLM/RAG project experience.
+C11,Etraveli,The candidate has prompt engineering experience.,Unverified / unsupported by available CV evidence,Prompt engineering is not explicitly confirmed in the available CV summary.
+C12,Etraveli,The candidate may need additional experience in adoption metrics and internal tool rollout.,Supported as a gap assessment,The CV summary does not establish enterprise AI rollout or adoption KPI experience.
+C13,Etraveli,The candidate can translate technical details into practical applications.,Partially supported,"Teaching Assistant and AI project experience provide some supporting context, but this exact capability is an inference."
+C14,Sveaviken,The candidate has Python skills.,Supported,Python is listed in the CV skills.
+C15,Sveaviken,The candidate has familiarity with AI tools.,Supported in broad terms,"CV lists AI/ML tools and frameworks, though not necessarily the specific tools named in the job description."
+C16,Sveaviken,The candidate has experience developing AI agents and automation.,Unverified / overgeneralized,"CV includes AI applications/RAG, but the available evidence does not establish production AI agents or automation specifically."
+C17,Conclusion,The candidate is strong for AI product development and engineering roles.,Partially supported / evaluative,"There is relevant AI project experience, but job-specific requirements and gaps should be weighted more explicitly."
+C18,Conclusion,A Hub and Sveaviken are the best fits.,Partially supported / questionable ranking,"A Hub has strong skill overlap, but Sveaviken explicitly requires fluent Swedish, while the CV lists Swedish as beginner."
+C19,Conclusion,Legal exposure may be needed for Legora.,Supported,This reflects the supplied job description's stated legal qualification/work experience requirement.
